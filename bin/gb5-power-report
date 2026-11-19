@@ -1,0 +1,397 @@
+#!/usr/bin/env python3
+"""Where the watts actually go on a Galaxy Book5 Pro (Arrow Lake-H).
+
+Three questions this answers that no single existing tool does:
+
+  1. What is the WHOLE MACHINE drawing?  Only the battery knows. RAPL sees the
+     SoC package and nothing else -- not the panel, not Wi-Fi, not the SSD, not
+     the board. On this laptop the package is well under half of total draw at
+     idle, so tuning by RAPL alone optimises the minority of the problem.
+
+  2. Of the package, what is cores vs GPU vs everything else?  turbostat's
+     PkgWatt/CorWatt/GFXWatt give the first two; the remainder is fabric, memory
+     controller and I/O, which is the part people forget exists.
+
+  3. Is each engine actually idling when unused?  A GPU out of RC6 or an NPU
+     stuck awake costs power continuously and shows up nowhere obvious.
+
+Run it on BATTERY for the numbers that matter. On AC the system total is
+unknowable (the charger masks it) and the tool says so rather than guessing.
+"""
+import os, re, subprocess, sys, time, glob
+
+INTERVAL = float(os.environ.get("GB5_POWER_INTERVAL", "5"))
+RAPL = "/sys/class/powercap/intel-rapl:0"
+
+C = {"r": "\033[0m", "b": "\033[1m", "d": "\033[2m", "y": "\033[33m",
+     "g": "\033[32m", "c": "\033[36m", "R": "\033[31m"}
+if not sys.stdout.isatty() or os.environ.get("NO_COLOR"):
+    C = {k: "" for k in C}
+
+
+def read(p, default=None):
+    try:
+        with open(p) as f:
+            return f.read().strip()
+    except Exception:
+        return default
+
+
+def num(p, default=0):
+    v = read(p)
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return default
+
+
+def bar(frac, width=28):
+    frac = max(0.0, min(1.0, frac))
+    n = int(round(frac * width))
+    return "█" * n + C["d"] + "·" * (width - n) + C["r"]
+
+
+# ---------------------------------------------------------------- whole system
+def battery():
+    """Total draw in watts, positive = discharging. None if not on battery."""
+    for b in sorted(glob.glob("/sys/class/power_supply/BAT*")):
+        status = read(b + "/status", "")
+        v = num(b + "/voltage_now")
+        # power_now is authoritative where present; else current x voltage
+        p = num(b + "/power_now")
+        if p:
+            w = p / 1e6
+        elif v:
+            w = num(b + "/current_now") * v / 1e12
+        else:
+            continue
+        cap = num(b + "/capacity")
+        # energy_full may be in uWh, or charge_full in uAh
+        eh = num(b + "/energy_now") / 1e6
+        if not eh and v:
+            eh = num(b + "/charge_now") * v / 1e12
+        return {"status": status, "watts": w, "pct": cap, "wh_left": eh}
+    return None
+
+
+def battery_full_wh():
+    """Full-charge capacity in Wh. Batteries report either energy (uWh) or charge
+    (uAh) -- the charge form needs the design voltage to become watt-hours."""
+    for b in sorted(glob.glob("/sys/class/power_supply/BAT*")):
+        e = num(b + "/energy_full")
+        if e:
+            return e / 1e6
+        c = num(b + "/charge_full")
+        v = num(b + "/voltage_min_design") or num(b + "/voltage_now")
+        if c and v:
+            return c * v / 1e12
+    return None
+
+
+def on_ac():
+    for ps in glob.glob("/sys/class/power_supply/A*"):
+        if read(ps + "/online") == "1":
+            return True
+    return False
+
+
+# ---------------------------------------------------------------- the package
+def turbostat(interval):
+    """One sample. Returns dict of column -> float, or None."""
+    try:
+        out = subprocess.run(
+            ["turbostat", "--quiet", "--Summary",
+             "--interval", str(interval), "--num_iterations", "1"],
+            capture_output=True, text=True, timeout=interval + 20).stdout
+    except Exception:
+        return None
+    lines = [l for l in out.splitlines() if l.strip()]
+    if len(lines) < 2:
+        return None
+    hdr, val = lines[0].split("\t"), lines[-1].split("\t")
+    d = {}
+    for k, v in zip(hdr, val):
+        try:
+            d[k] = float(v)
+        except ValueError:
+            pass
+    return d
+
+
+def rapl_watts(seconds):
+    """Fallback if turbostat is unavailable: package/core/uncore from RAPL."""
+    dom = {}
+    for z in [RAPL] + sorted(glob.glob(RAPL + ":*")):
+        n = read(z + "/name")
+        if n:
+            dom[n] = (z, num(z + "/energy_uj"))
+    time.sleep(seconds)
+    out = {}
+    for n, (z, e0) in dom.items():
+        out[n] = (num(z + "/energy_uj") - e0) / (seconds * 1e6)
+    return out
+
+
+# ---------------------------------------------------------------- the engines
+CORE_GROUPS = [("P-core", range(0, 6)), ("E-core", range(6, 14)),
+               ("LP-E", range(14, 16))]
+
+
+def cpu_busy(seconds):
+    def snap():
+        d = {}
+        for l in open("/proc/stat"):
+            if l.startswith("cpu") and len(l) > 3 and l[3].isdigit():
+                f = l.split()
+                d[int(f[0][3:])] = (sum(int(x) for x in f[1:]), int(f[4]))
+        return d
+    a = snap(); time.sleep(seconds); b = snap()
+    out = []
+    for name, rng in CORE_GROUPS:
+        tot = idl = 0
+        for c in rng:
+            if c in a and c in b:
+                tot += b[c][0] - a[c][0]
+                idl += b[c][1] - a[c][1]
+        out.append((name, 100.0 * (tot - idl) / tot if tot else 0.0, len(list(rng))))
+    return out
+
+
+def gpu_state():
+    gt = None
+    for cand in glob.glob("/sys/class/drm/card*/gt/gt0"):
+        gt = cand; break
+    if not gt:
+        return None
+    return {"cur": num(gt + "/rps_cur_freq_mhz"),
+            "max": num(gt + "/rps_max_freq_mhz"),
+            "min": num(gt + "/rps_min_freq_mhz"),
+            "rc6_enabled": read(gt + "/rc6_enable") == "1",
+            "slpc": read(gt + "/slpc_power_profile", "")}
+
+
+def npu_state():
+    for d in glob.glob("/sys/devices/pci0000:00/*/npu_busy_time_us"):
+        dev = os.path.dirname(d)
+        act = num(dev + "/power/runtime_active_time")
+        sus = num(dev + "/power/runtime_suspended_time")
+        tot = act + sus
+        return {"status": read(dev + "/power/runtime_status", "?"),
+                "asleep_pct": 100.0 * sus / tot if tot else 0.0,
+                "busy_s": num(d) / 1e6,
+                "freq": num(dev + "/npu_current_frequency_mhz")}
+    return None
+
+
+def uncore():
+    for d in glob.glob("/sys/devices/system/cpu/intel_uncore_frequency/*/"):
+        return {"cur": num(d + "current_freq_khz") // 1000,
+                "min": num(d + "min_freq_khz") // 1000,
+                "max": num(d + "max_freq_khz") // 1000}
+    return None
+
+
+def backlight():
+    for d in glob.glob("/sys/class/backlight/*"):
+        b, m = num(d + "/brightness"), num(d + "/max_brightness")
+        if m:
+            return 100.0 * b / m
+    return None
+
+
+def refresh_hz():
+    try:
+        out = subprocess.run(["kscreen-doctor", "-o"], capture_output=True,
+                             text=True, timeout=5).stdout
+        m = re.search(r"\*\S*?@(\d+)", out)
+        if m:
+            return int(m.group(1))
+        for line in out.splitlines():
+            if "*" in line and "@" in line:
+                m = re.search(r"@(\d+)", line)
+                if m:
+                    return int(m.group(1))
+    except Exception:
+        pass
+    return None
+
+
+# ---------------------------------------------------------------- report
+def main():
+    print(f"\n{C['b']}  Power report{C['r']}  {C['d']}"
+          f"{INTERVAL:.0f} s sample{C['r']}\n")
+
+    ts = turbostat(INTERVAL)
+    busy = cpu_busy(0.5)
+    bat, ac = battery(), on_ac()
+
+    pkg = ts.get("PkgWatt") if ts else None
+    cor = ts.get("CorWatt") if ts else None
+    gfx = ts.get("GFXWatt") if ts else None
+    if pkg is None:
+        r = rapl_watts(INTERVAL)
+        pkg, cor = r.get("package-0"), r.get("core")
+
+    # ---- 1. the whole machine
+    print(f"{C['b']}  SYSTEM{C['r']}")
+    if bat and bat["watts"] > 0.05 and "Discharging" in bat["status"]:
+        total = bat["watts"]
+        full = battery_full_wh()
+        cap = f", {full:.0f} Wh pack" if full else ""
+        print(f"    {C['b']}{total:5.1f} W{C['r']}  total draw   "
+              f"{C['d']}battery {bat['pct']}%{cap}{C['r']}")
+        if bat["wh_left"] and total:
+            h = bat["wh_left"] / total
+            print(f"    {C['c']}{int(h)}h {int((h % 1) * 60):02d}m{C['r']}  "
+                  f"remaining at this rate  {C['d']}({bat['wh_left']:.1f} Wh left){C['r']}")
+        if pkg:
+            rest = total - pkg
+            print(f"\n    {pkg:5.1f} W  SoC package          {bar(pkg / total)}")
+            print(f"    {rest:5.1f} W  everything else      {bar(rest / total)}")
+            print(f"    {C['d']}         panel, Wi-Fi, SSD, RAM, board, losses{C['r']}")
+    else:
+        why = "on AC -- the charger hides system draw" if ac else \
+              f"battery says '{bat['status'] if bat else 'unknown'}'"
+        print(f"    {C['y']}total system draw unavailable{C['r']}  {C['d']}({why}){C['r']}")
+        print(f"    {C['d']}unplug and re-run for the number that decides battery life{C['r']}")
+
+    # ---- 2. inside the package
+    print(f"\n{C['b']}  SoC PACKAGE{C['r']}   {C['d']}{pkg:.1f} W total{C['r']}" if pkg else "")
+    if pkg:
+        rows = []
+        if cor is not None:
+            rows.append(("CPU cores", cor))
+        if gfx is not None:
+            rows.append(("GPU", gfx))
+        known = sum(v for _, v in rows)
+        rows.append(("fabric, memory ctrl, I/O", max(0.0, pkg - known)))
+        for name, w in rows:
+            print(f"    {w:5.2f} W  {name:<26} {bar(w / pkg)}")
+
+    # ---- 3. what is actually running
+    print(f"\n{C['b']}  ACTIVITY{C['r']}")
+    for name, pct, n in busy:
+        print(f"    {pct:5.1f}%   {name:<8} {C['d']}({n} cores){C['r']:<6} {bar(pct / 100)}")
+
+    g = gpu_state()
+    if g:
+        rc6 = ts.get("GFX%rc6") if ts else None
+        state = (f"{rc6:.0f}% in RC6" if rc6 is not None
+                 else ("RC6 enabled" if g["rc6_enabled"] else C["R"] + "RC6 OFF" + C["r"]))
+        warn = "" if (rc6 is None or rc6 > 70) else f"  {C['y']}<- GPU is staying awake{C['r']}"
+        print(f"\n    GPU    {g['cur']:>4} MHz  {C['d']}(range {g['min']}-{g['max']}){C['r']}"
+              f"   {state}{warn}")
+        prof = g["slpc"].replace("[", C["g"]).replace("]", C["r"])
+        if prof:
+            print(f"           SLPC power profile: {prof}")
+
+    n = npu_state()
+    if n:
+        col = C["g"] if n["status"] == "suspended" else C["y"]
+        print(f"    NPU    {col}{n['status']}{C['r']}  {C['d']}asleep "
+              f"{n['asleep_pct']:.1f}% of uptime, {n['busy_s']:.1f} s of work total{C['r']}")
+
+    u = uncore()
+    if u:
+        pinned = "" if u["cur"] < u["max"] else f"  {C['y']}<- pinned at max{C['r']}"
+        print(f"    Uncore {u['cur']:>4} MHz  {C['d']}(range {u['min']}-{u['max']}){C['r']}{pinned}")
+
+    if ts:
+        pc = max((v for k, v in ts.items() if k.startswith(("Pkg%pc", "Pk%pc"))),
+                 default=None)
+        if pc is not None:
+            col = C["R"] if pc < 0.5 else C["g"]
+            note = f"  {C['d']}<- normal with anything running; needs a truly idle machine{C['r']}" \
+                   if pc < 0.5 else ""
+            print(f"    Pkg-C  {col}{pc:5.2f}%{C['r']} deepest package idle residency{note}")
+
+    # ---- 4. the two biggest non-package consumers you control
+    print(f"\n{C['b']}  PANEL{C['r']}   {C['d']}usually the largest single "
+          f"draw outside the SoC{C['r']}")
+    bl, hz = backlight(), refresh_hz()
+    parts = []
+    if bl is not None:
+        parts.append(f"brightness {bl:.0f}%")
+    if hz:
+        parts.append(f"{hz} Hz")
+    print("    " + ("   ".join(parts) if parts else C["d"] + "unreadable" + C["r"]))
+    if hz and hz > 60 and not ac:
+        print(f"    {C['y']}running {hz} Hz on battery{C['r']}")
+
+    prof = read("/sys/firmware/acpi/platform_profile", "?")
+    epp = read("/sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference", "?")
+    gov = read("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor", "?")
+    print(f"\n{C['b']}  POLICY{C['r']}")
+    print(f"    platform profile {C['c']}{prof}{C['r']}   governor {gov}   EPP {C['c']}{epp}{C['r']}")
+    print()
+
+
+def watch():
+    """One line per sample. Point this at real work -- a video call, a build, a
+    YouTube tab -- and read the columns that move. Ctrl-C to stop, and it prints
+    the average and the total energy for the period, which is the number that
+    actually predicts battery life."""
+    hdr = (f"{C['b']}    time     total    pkg   cores    gpu   other   "
+           f"P%    E%   LPE%   GPUMHz  rc6%{C['r']}")
+    print(f"\n{C['d']}  sampling every {INTERVAL:.0f} s -- Ctrl-C to stop{C['r']}", flush=True)
+    print(hdr, flush=True)
+    n = 0
+    acc = {"total": 0.0, "pkg": 0.0}
+    t_start = time.time()
+    try:
+        while True:
+            ts = turbostat(INTERVAL)
+            busy = cpu_busy(0.3)
+            bat = battery()
+            pkg = ts.get("PkgWatt") if ts else None
+            cor = ts.get("CorWatt") if ts else 0.0
+            gfx = ts.get("GFXWatt") if ts else 0.0
+            rc6 = ts.get("GFX%rc6") if ts else 0.0
+            g = gpu_state() or {"cur": 0}
+            if pkg is None:
+                pkg = rapl_watts(1).get("package-0", 0.0)
+            other = max(0.0, pkg - cor - gfx)
+            disch = bat and bat["watts"] > 0.05 and "Discharging" in bat["status"]
+            tot = bat["watts"] if disch else None
+            n += 1
+            acc["pkg"] += pkg
+            if tot:
+                acc["total"] += tot
+            totstr = f"{C['b']}{tot:6.1f}{C['r']}" if tot else f"{C['d']}   ac {C['r']}"
+            print(f"  {time.strftime('%H:%M:%S')}  {totstr}  {pkg:5.2f}  {cor:6.2f} "
+                  f"{gfx:6.2f}  {other:6.2f}  {busy[0][1]:4.0f}  {busy[1][1]:5.0f} "
+                  f"{busy[2][1]:5.0f}   {g['cur']:6.0f} {rc6:5.0f}", flush=True)
+            if n % 20 == 0:
+                print(hdr, flush=True)
+    except KeyboardInterrupt:
+        el = time.time() - t_start
+        print(f"\n{C['b']}  over {el/60:.1f} min, {n} samples{C['r']}")
+        print(f"    package average  {acc['pkg']/n:5.2f} W"
+              f"   {C['d']}({acc['pkg']/n*el/3600:.2f} Wh){C['r']}")
+        if acc["total"]:
+            avg = acc["total"] / n
+            print(f"    {C['b']}system average   {avg:5.2f} W{C['r']}"
+                  f"   {C['d']}({avg*el/3600:.2f} Wh){C['r']}")
+            full = battery_full_wh()
+            if full:
+                print(f"    {C['c']}implies {full/avg:.1f} h{C['r']} on a full "
+                      f"{full:.1f} Wh battery {C['d']}at this workload{C['r']}")
+        else:
+            print(f"    {C['d']}system total not measurable on AC{C['r']}")
+        print()
+
+
+if __name__ == "__main__":
+    if os.geteuid() != 0:
+        print("needs root for RAPL and turbostat MSRs -- try: sudo gb5-power-report",
+              file=sys.stderr)
+        sys.exit(1)
+    if "--watch" in sys.argv or "-w" in sys.argv:
+        watch()
+    elif "--help" in sys.argv or "-h" in sys.argv:
+        print(__doc__)
+        print("  gb5-power-report            one snapshot")
+        print("  gb5-power-report --watch    continuous, averages on Ctrl-C")
+        print("  GB5_POWER_INTERVAL=10 ...   seconds per sample (default 5)")
+    else:
+        main()

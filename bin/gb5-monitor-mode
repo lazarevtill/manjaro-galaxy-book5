@@ -1,0 +1,63 @@
+#!/bin/bash
+# Make monitor-mode Wi-Fi survivable on this machine.
+#
+# The internal BE201 (iwlmld) has a confirmed use-after-free: under monitor mode
+# the firmware asserts, and the RESTART path then walks a freed chanctx --
+# GPF at ieee80211_free_chanctx [mac80211], fault address 0xdead000000000122
+# (LIST_POISON2). It froze this laptop twice (2026-09-02) and needed a forced
+# power-off. See HISTORY.md Phase 7.
+#
+# The bug is in the restart path, so iwlwifi.fw_restart=0 avoids it: after a
+# firmware error the adapter simply stays down instead of tearing down a
+# chanctx that is about to be freed underneath it.
+#
+# That is a BAD permanent default -- any firmware blip then kills Wi-Fi until a
+# reload -- which is why it lives here as a session toggle rather than in
+# modprobe.d. `off` puts the default back.
+#
+#   gb5-monitor-mode on      before airmon-ng / airodump-ng / aireplay-ng
+#   gb5-monitor-mode off     when finished (restores self-healing Wi-Fi)
+#   gb5-monitor-mode status
+#
+# This reduces the risk; it does not remove the bug. The only thing that removes
+# it is not using this adapter for monitor mode -- an external USB adapter
+# (AR9271/ath9k_htc, MT7921AU/mt76) bypasses iwlmld entirely.
+set -uo pipefail
+[ "$(id -u)" -eq 0 ] || { echo "needs root" >&2; exit 1; }
+
+P=/sys/module/iwlwifi/parameters/fw_restart
+STACK=(iwlmld iwlwifi)
+
+reload() { # reload <0|1>
+    local want="$1"
+    # mac80211/cfg80211 stay loaded; only the driver needs re-inserting.
+    systemctl is-active --quiet NetworkManager && {
+        echo "  stopping NetworkManager"; systemctl stop NetworkManager; }
+    for m in "${STACK[@]}"; do modprobe -r "$m" 2>/dev/null; done
+    modprobe iwlwifi fw_restart="$want" || { echo "FAILED to load iwlwifi" >&2; return 1; }
+    sleep 2
+    systemctl start NetworkManager 2>/dev/null
+    sleep 1
+}
+
+case "${1:-status}" in
+  on)
+    [ "$(cat $P 2>/dev/null)" = "N" ] && { echo "already on (fw_restart=N)"; exit 0; }
+    reload 0 || exit 1
+    echo "monitor-mode guard ON  — fw_restart=$(cat $P)"
+    echo "  Wi-Fi will NOT self-heal from a firmware error until you run 'off'."
+    ;;
+  off)
+    [ "$(cat $P 2>/dev/null)" = "Y" ] && { echo "already off (fw_restart=Y)"; exit 0; }
+    reload 1 || exit 1
+    echo "monitor-mode guard OFF — fw_restart=$(cat $P) (normal self-healing Wi-Fi)"
+    ;;
+  status)
+    case "$(cat $P 2>/dev/null)" in
+      N) echo "guard ON  (fw_restart=N) — safe for monitor mode, Wi-Fi will not self-heal" ;;
+      Y) echo "guard OFF (fw_restart=Y) — normal daily setting" ;;
+      *) echo "iwlwifi not loaded"; exit 1 ;;
+    esac
+    ;;
+  *) sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+esac

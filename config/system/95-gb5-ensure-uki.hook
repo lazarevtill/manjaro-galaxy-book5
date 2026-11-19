@@ -1,0 +1,12 @@
+[Trigger]
+Type = Package
+Operation = Install
+Operation = Upgrade
+Target = linux*
+Target = mkinitcpio
+
+[Action]
+Description = Ensuring every kernel preset produces a signed UKI...
+When = PostTransaction
+Depends = mkinitcpio
+Exec = /usr/local/sbin/gb5-ensure-uki.sh

@@ -1,0 +1,20 @@
+[Unit]
+Description=Weekly guarded system update for the Galaxy Book5
+
+[Timer]
+OnCalendar=Sun 10:00
+# Small jitter only. This is one laptop, not a fleet stampeding a mirror, and a
+# long delay just moves the run to a moment when the machine's state has changed.
+RandomizedDelaySec=10min
+# If the machine was off at the scheduled time, catch up on the next boot.
+#
+# Deliberately NO OnBootSec: that is a MONOTONIC trigger which elapses once per
+# boot, EVERY boot. Combined with OnCalendar it turns a weekly timer into a
+# once-per-boot one, and on a boot that also owes a Persistent catch-up it fires
+# the service TWICE -- where the second run's pre-flight correctly refuses
+# because the first installed a kernel, producing a scary failure notice for a
+# machine whose only correct next action is to reboot.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

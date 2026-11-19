@@ -1,0 +1,34 @@
+# Runs LAST in the transaction (after zz-sbctl.hook), so it inspects images that
+# have already been signed. See /usr/local/sbin/gb5-boot-guard.sh and HISTORY
+# Phase 8. A failure here does not abort anything — pacman hooks cannot — but it
+# prints an ERROR, and gb5-safe-update runs the guard again after its own
+# transaction and fails the run if it still reports one.
+[Trigger]
+Type = Package
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Target = linux*
+Target = systemd
+Target = grub
+Target = install-grub
+Target = mkinitcpio
+Target = sbctl
+Target = intel-ucode
+
+[Trigger]
+Type = Path
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Target = usr/lib/modules/*/vmlinuz
+Target = usr/lib/systemd/boot/efi/*
+
+[Action]
+Description = Guarding the boot chain (removable fallback, fallback UKI, sbctl db)...
+When = PostTransaction
+Depends = sbctl
+Depends = sbsigntools
+Depends = jq
+Depends = binutils
+Exec = /usr/local/sbin/gb5-boot-guard.sh --hook

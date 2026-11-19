@@ -1,0 +1,16 @@
+[Unit]
+Description=Weekly Flatpak update (system installation) for the Galaxy Book5
+Documentation=file:///home/lazarevtill/projects/gb5-enablement/AGENTS.md
+# Flatpak apps are sandboxed and do not touch the boot chain, kernel or DKMS,
+# so they need none of gb5-safe-update's guards. Skipped on battery; Persistent=
+# on the timer does not retry a skipped run, so it waits for the next week.
+After=network-online.target
+ConditionACPower=true
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/flatpak update --system --noninteractive -y
+ExecStart=/usr/bin/flatpak uninstall --system --unused --noninteractive -y
+Nice=10
+IOSchedulingClass=idle

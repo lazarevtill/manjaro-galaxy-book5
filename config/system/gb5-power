@@ -1,0 +1,30 @@
+# Set to 1 to skip the refresh-rate switch on battery entirely.
+#
+# NOTE (2026-08-22): on THIS panel the switch does nothing, so the setting is
+# moot here. kscreen-doctor lists exactly one 2880x1800 mode and it is 120 Hz;
+# every 60 Hz mode the panel offers is at a lower resolution. The script logged
+# success for weeks anyway, because kscreen-doctor exits 0 even when it prints
+# "Output mode not found". It now verifies by reading the state back.
+#
+# The old comment here claimed the 60 Hz drop was "a real power saving on this
+# OLED". That was never measured and never happened. What was measured: on an
+# emissive panel the brightness slider is worth ~0.2 W with dark content, while
+# screen CONTENT is worth ~10 W. Refresh rate was never the lever.
+GB5_KEEP_120HZ=0
+
+# Profile to use at or below GB5_PROFILE_LOW_PCT battery. Was "quiet".
+#
+# Changed 2026-08-22 after measuring the two under sustained all-core load, each
+# arm started from TCPU <= 52 C to defeat heat soak:
+#
+#   quiet      19.77 W avg   1025 MHz  (exactly 1025 twice -- an enforced cap)
+#   balanced   19.73 W avg   1404 MHz
+#
+# +0.2% power with overlapping ranges, -27% clock with none. Under load quiet
+# gives up a quarter of the clock and returns no measurable package saving.
+#
+# Caveat kept deliberately: RAPL cannot see the fan, and quieter fans are what
+# Samsung's Silent mode is actually for. The tachometer here returns an I/O
+# error, so that side was never quantified. Set this back to "quiet" if noise
+# on battery matters more than sustained speed.
+GB5_PROFILE_LOW=balanced

@@ -1,0 +1,23 @@
+# Override of /usr/lib/pam.d/kde-fingerprint (Plasma lock screen / unlock).
+#
+# Identical to the vendor file except pam_fprintd carries max-tries and timeout.
+# Added 2026-08-22: the same options were applied to sudo, sddm, login and
+# polkit-1 and this file was missed -- which is the one that matters most, since
+# the lock screen is where most fingerprint verifies happen.
+#
+# Kept verbatim from the vendor file, deliberately:
+#   * pam_faillock preauth comes BEFORE pam_fprintd here, so a locked account
+#     cannot be unlocked by fingerprint. The other four stacks have fprintd
+#     first, which bypasses faillock. That difference predates this change and
+#     is left alone rather than silently altered -- see docs/system/pam.md.
+#   * "required" rather than "sufficient": this stack is fingerprint-only and
+#     Plasma runs it alongside the password stack, so it must not short-circuit.
+auth       required                    pam_shells.so
+auth       requisite                   pam_nologin.so
+auth       requisite                   pam_faillock.so      preauth
+-auth      required                    pam_fprintd.so       max-tries=5 timeout=45
+auth       optional                    pam_permit.so
+auth       required                    pam_env.so
+account    include                     system-local-login
+password   required                    pam_deny.so
+session    include                     system-local-login

@@ -1,0 +1,7 @@
+# The IPU6 exposes ~48 raw Bayer capture nodes. They advertise VIDEO_CAPTURE, so
+# applications enumerating /dev/video* happily pick one, start the sensor and then
+# render nothing usable. libcamera does not use this udev metadata — it walks the
+# media graph directly — so clearing the capability hint hides these nodes from
+# ordinary apps without affecting libcamera or the relay.
+SUBSYSTEM=="video4linux", ATTR{name}=="Intel IPU6 ISYS Capture*", \
+  ENV{ID_V4L_CAPABILITIES}="", ENV{ID_V4L_PRODUCT}="", ENV{ID_MEDIA_PLAYER}=""

@@ -1,0 +1,38 @@
+[Unit]
+Description=Galaxy Book5 guarded system update
+Documentation=file:///home/lazarevtill/projects/gb5-enablement/AGENTS.md
+After=network-online.target time-sync.target
+Wants=network-online.target
+# NOTE: no ConditionACPower here on purpose. A failed condition SKIPS the unit --
+# ExecStopPost never runs, nothing is logged where anyone looks, and the timer
+# still marks the trigger elapsed, so Persistent= will not retry it. A user who
+# is unplugged every Sunday morning would get no updates and no signal, forever.
+# The script's own pre-flight refuses on battery instead, which is loud and
+# retried next week.
+
+[Service]
+Type=oneshot
+# A pacman transaction killed part-way can leave an unsigned UKI on a Secure Boot
+# machine. The inhibitor stops the realistic interruptions: lid close, idle
+# suspend, the desktop's shutdown/restart, and UPower's critical-battery
+# hibernate. It does NOT stop a root `systemctl poweroff`, which bypasses
+# inhibitors -- that case is covered by the stale-db.lck check on the next run.
+ExecStart=/usr/bin/systemd-inhibit --what=sleep:shutdown:idle:handle-lid-switch \
+          --who="gb5-safe-update" --why="guarded system update in progress" \
+          --mode=block /usr/local/sbin/gb5-safe-update
+# No start timeout: the guard is the inhibitor plus pacman's own transfer
+# timeouts, not a stopwatch. A 90-minute cap did the opposite of what its comment
+# claimed -- on expiry systemd SIGTERMs the shell, which does not forward it, and
+# then SIGKILLs pacman mid-transaction.
+TimeoutStartSec=infinity
+TimeoutStopSec=15min
+KillMode=mixed
+KillSignal=SIGTERM
+# A failed update must be loud. Runs on success, failure, timeout and kill.
+ExecStopPost=/usr/local/sbin/gb5-update-notify $EXIT_STATUS $SERVICE_RESULT
+Nice=10
+IOSchedulingClass=idle
+# Enabled 2026-11-19 at the user's request ("maintainable without attention").
+# Keeps the 3 newest gb5-safe-update snapshots; never touches B/D/W/H ones
+# it did not create (the filter is the comment, see gb5-safe-update).
+Environment=GB5_PRUNE_SNAPSHOTS=1 GB5_KEEP_SNAPSHOTS=3

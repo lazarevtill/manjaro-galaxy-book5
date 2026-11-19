@@ -1,0 +1,22 @@
+# /etc/fstab: static file system information.
+#
+# Use 'blkid' to print the universally unique identifier for a device; this may
+# be used with UUID= as a more robust way to name devices that works even if
+# disks are added and removed. See fstab(5).
+#
+# <file system>             <mount point>  <type>  <options>  <dump>  <pass>
+UUID=D214-6D52                            /boot/efi      vfat    defaults,umask=0077 0 2
+UUID=3e8e0bdf-0525-450d-be13-75aa2021f9a4 /              btrfs   subvol=/@,defaults,compress=zstd:1 0 0
+UUID=3e8e0bdf-0525-450d-be13-75aa2021f9a4 /home          btrfs   subvol=/@home,defaults,compress=zstd:1 0 0
+UUID=3e8e0bdf-0525-450d-be13-75aa2021f9a4 /var/cache     btrfs   subvol=/@cache,defaults,compress=zstd:1 0 0
+UUID=3e8e0bdf-0525-450d-be13-75aa2021f9a4 /var/log       btrfs   subvol=/@log,defaults,compress=zstd:1 0 0
+UUID=3cefc1bd-97d3-4de2-9ff7-8f2a933f99cc swap           swap    pri=10     0 0
+tmpfs                                     /tmp           tmpfs   defaults,noatime,mode=1777 0 0
+
+# Swapfile on its own btrfs subvolume, for hibernation.
+# @swap is a sibling of @ so Timeshift's snapshots of @ and @home never capture
+# a 20 GiB file. nocow + nodatasum are set on the file itself by
+# 'btrfs filesystem mkswapfile'; btrfs refuses to swapon anything compressed or
+# COW, so a successful swapon is itself the proof it is configured correctly.
+UUID=3e8e0bdf-0525-450d-be13-75aa2021f9a4  /swap  btrfs  subvol=@swap,noatime  0 0
+/swap/swapfile  none  swap  pri=1  0 0

@@ -1,0 +1,34 @@
+# Manjaro's own 98-install-grub.hook re-runs grub-install on every grub upgrade
+# WITHOUT --disable-shim-lock, which silently puts the shim_lock verifier back
+# into grubx64.efi. With Secure Boot on and no shim in the boot chain, that
+# verifier makes GRUB refuse the kernel: "prohibited by secure boot policy".
+#
+#
+# --no-nvram is ESSENTIAL: without it grub-install rewrites the Manjaro NVRAM
+# entry and moves it to the head of BootOrder. With Secure Boot on that would
+# boot GRUB, which dies at "verification requested but nobody cares", and the
+# machine would look bricked. (2026-11-19: GRUB has no NVRAM entry any more --
+# BootOrder is 0006 systemd-boot, 0000/0007 Windows -- and --no-nvram keeps it so.)
+# NOTE: this hook deliberately does NOT copy grubx64.efi over
+# /boot/efi/EFI/boot/bootx64.efi any more. That path is the firmware's
+# fallback when NVRAM is reset. It held a copy of the signed UKI until
+# 2026-08-20; since then it is the signed systemd-boot (kept so by
+# gb5-boot-guard.sh), so every fallback lands in the boot menu.
+#
+# Ordering is by filename: 99-this -> zz-sbctl -> zzz-gb5-boot-guard.
+# CORRECTED 2026-11-19: zz-sbctl does NOT re-sign grubx64.efi after a grub-only
+# upgrade (its path triggers do not match grub's files); gb5-boot-guard.sh does.
+# Manjaro's 98-install-grub.hook is disabled (/etc/pacman.d/hooks symlink to
+# /dev/null): since install-grub 2.16 it copies a shim_lock GRUB over the
+# removable fallback. See config/system/98-install-grub.hook.README.
+[Trigger]
+Type = Package
+Operation = Install
+Operation = Upgrade
+Target = grub
+
+[Action]
+Description = Rebuilding GRUB EFI image with --disable-shim-lock...
+When = PostTransaction
+Depends = grub
+Exec = /bin/sh -c 'grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=Manjaro --disable-shim-lock --no-nvram --recheck'

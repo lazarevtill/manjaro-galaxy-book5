@@ -1,0 +1,10 @@
+/etc/pacman.d/hooks/98-install-grub.hook is a symlink to /dev/null, which is
+pacman's documented way to disable a packaged hook of the same name.
+
+Manjaro's /usr/share/libalpm/hooks/98-install-grub.hook runs /usr/bin/install-grub
+on every grub upgrade. Since install-grub 2.16 that script copies grubx64.efi
+over \EFI\BOOT\BOOTX64.EFI whenever they differ -- and it builds that GRUB
+WITHOUT --disable-shim-lock. On 2026-11-11 this replaced the removable fallback
+(systemd-boot) with a GRUB that refuses the kernel under Secure Boot.
+99-grub-disable-shim-lock.hook already performs the only grub-install this
+machine wants. gb5-boot-guard.sh restores the fallback if anything else writes it.

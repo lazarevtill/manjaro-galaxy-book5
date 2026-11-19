@@ -1,0 +1,144 @@
+#!/usr/bin/env python3
+"""Long-run power/idle logger. One CSV row per interval, indefinitely.
+
+The point is to defeat the problem that has wrecked every short measurement in
+this project: on a live desktop the noise floor is several watts, so a 20-second
+sample says more about what the desktop happened to be doing than about the
+change under test. Hours of rows fix that -- you can select quiet windows after
+the fact instead of hoping for one during the test.
+
+Records, per interval: package/core/gpu watts, whole-system watts when
+discharging, per-core-type busy, GPU clock and RC6, package C-state deltas,
+the tightest LTR any IP block is advertising, and the platform profile.
+
+  gb5-power-log                 -> /var/log/gb5-power.csv, 30 s intervals
+  gb5-power-log FILE SECONDS
+"""
+import os, sys, time, glob, re, subprocess
+
+OUT = sys.argv[1] if len(sys.argv) > 1 else "/var/log/gb5-power.csv"
+IV = float(sys.argv[2]) if len(sys.argv) > 2 else 30.0
+PMC = "/sys/kernel/debug/pmc_core"
+
+
+def rd(p, d=None):
+    try:
+        return open(p).read().strip()
+    except Exception:
+        return d
+
+
+def num(p, d=0):
+    v = rd(p)
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return d
+
+
+def pkg_cstates():
+    out = {}
+    t = rd(PMC + "/package_cstate_show", "")
+    for line in t.splitlines():
+        m = re.match(r"Package (C\d+)\s*:\s*(\d+)", line.strip())
+        if m:
+            out[m.group(1)] = int(m.group(2))
+    return out
+
+
+def tightest_ltr():
+    """Smallest non-zero latency tolerance any IP block advertises, in ns.
+    A small number here is what stops the platform reaching its deepest states."""
+    t = rd(PMC + "/ltr_show", "")
+    best, who = None, ""
+    for line in t.splitlines():
+        m = re.search(r"PMC\d+:(\S+).*?Snoop\(ns\):\s*(\d+)", line)
+        if m:
+            v = int(m.group(2))
+            if v > 0 and (best is None or v < best):
+                best, who = v, m.group(1)
+    return (best or 0), who
+
+
+def cpu_snap():
+    d = {}
+    for l in open("/proc/stat"):
+        if l.startswith("cpu") and len(l) > 3 and l[3].isdigit():
+            f = l.split()
+            d[int(f[0][3:])] = (sum(int(x) for x in f[1:]), int(f[4]))
+    return d
+
+
+GROUPS = [("P", range(0, 6)), ("E", range(6, 14)), ("L", range(14, 16))]
+E_PKG = "/sys/class/powercap/intel-rapl:0/energy_uj"
+E_COR = "/sys/class/powercap/intel-rapl:0:0/energy_uj"
+GT = (glob.glob("/sys/class/drm/card*/gt/gt0") or [None])[0]
+
+
+def battery():
+    """Returns status, instantaneous watts, capacity %, and raw charge in uAh.
+
+    The charge counter is the one that matters for energy accounting.
+    current_now x voltage_now is an *instantaneous* sample: at a 30 s interval it
+    misses short bursts entirely, and this machine does hit 20 W transients. Over
+    a 1.7 h window that under-reported real drain by 17% against the coulomb
+    counter. Log charge_now so later analysis can integrate properly instead of
+    averaging snapshots."""
+    for b in sorted(glob.glob("/sys/class/power_supply/BAT*")):
+        st = rd(b + "/status", "")
+        v = num(b + "/voltage_now")
+        p = num(b + "/power_now")
+        w = p / 1e6 if p else num(b + "/current_now") * v / 1e12
+        return (st, (w if "Discharging" in st else 0.0), num(b + "/capacity"),
+                num(b + "/charge_now"), v)
+    return "", 0.0, 0, 0, 0
+
+
+def main():
+    new = not os.path.exists(OUT)
+    f = open(OUT, "a", buffering=1)
+    if new:
+        f.write("ts,pkg_w,core_w,sys_w,bat_pct,bat_status,P_busy,E_busy,L_busy,"
+                "gpu_mhz,rc6_pct,pc6_pct,pc8_pct,pc10_pct,ltr_ns,ltr_who,profile,"
+                "charge_uah,voltage_uv\n")
+    e0, c0 = num(E_PKG), num(E_COR)
+    rc0 = num(GT + "/rc6_residency_ms") if GT else 0
+    cs0 = pkg_cstates()
+    s0 = cpu_snap()
+    t0 = time.time()
+    while True:
+        time.sleep(IV)
+        t1 = time.time()
+        dt = t1 - t0
+        e1, c1 = num(E_PKG), num(E_COR)
+        rc1 = num(GT + "/rc6_residency_ms") if GT else 0
+        cs1 = pkg_cstates()
+        s1 = cpu_snap()
+        busy = []
+        for _, rng in GROUPS:
+            tot = idl = 0
+            for c in rng:
+                if c in s0 and c in s1:
+                    tot += s1[c][0] - s0[c][0]
+                    idl += s1[c][1] - s0[c][1]
+            busy.append(100.0 * (tot - idl) / tot if tot else 0.0)
+        st, sysw, pct, chg, volt = battery()
+        ltr, who = tightest_ltr()
+
+        def pcp(k):
+            return 100.0 * (cs1.get(k, 0) - cs0.get(k, 0)) / (dt * 1e6) if dt else 0.0
+
+        f.write(f"{int(t1)},{(e1-e0)/1e6/dt:.3f},{(c1-c0)/1e6/dt:.3f},{sysw:.3f},"
+                f"{pct},{st},{busy[0]:.1f},{busy[1]:.1f},{busy[2]:.1f},"
+                f"{num(GT+'/rps_cur_freq_mhz') if GT else 0},"
+                f"{100.0*(rc1-rc0)/(dt*1000):.1f},"
+                f"{pcp('C6'):.2f},{pcp('C8'):.2f},{pcp('C10'):.2f},"
+                f"{ltr},{who},{rd('/sys/firmware/acpi/platform_profile','?')},"
+                f"{chg},{volt}\n")
+        e0, c0, rc0, cs0, s0, t0 = e1, c1, rc1, cs1, s1, t1
+
+
+if __name__ == "__main__":
+    if os.geteuid() != 0:
+        sys.exit("needs root (RAPL + pmc_core debugfs)")
+    main()

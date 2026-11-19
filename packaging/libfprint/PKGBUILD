@@ -1,0 +1,519 @@
+# Maintainer: mandalb <1l549rtjz@mozmail.com>
+# Based on libfprint by Jan Alexander Steffens (heftig) <heftig@archlinux.org>
+# SDCP fork by TenSeventy7: https://github.com/TenSeventy7/libfprint-egismoc-sdcp
+# OpenSSL linkage fix by antoskuu: https://github.com/antoskuu/libfprint-egismoc-sdcp-fix
+#
+# Fixes fingerprint enrollment disappearing after first verify on EgisTec
+# Match-on-Chip sensors (egismoc driver). Replaces libfprint with a build
+# that adds SDCP support.
+#
+# Affected USB IDs: 1c7a:0582  1c7a:0583  1c7a:0584  1c7a:0586
+#                   1c7a:0587  1c7a:05a1  1c7a:05a5
+
+# The name of the package as it appears in pacman. The -git suffix is a
+# convention indicating the package tracks a git branch rather than a release.
+pkgname=libfprint-egismoc-sdcp-git
+
+# Placeholder version; overwritten at build time by pkgver() below.
+pkgver=r1831.4d128d4
+
+# Incremented manually when the PKGBUILD itself changes without a new pkgver.
+pkgrel=6
+
+# The AUR .SRCINFO declares a placeholder `pkgver=0` that the maintainer never
+# fills in. pacman's vercmp ranks a numeric segment above an alphabetic one, so
+# plain `0-1` outranks the real `r1831.<hash>` and every update check reports a
+# phantom upgrade. An epoch outranks everything to its right unconditionally,
+# which kills the false positive at the source instead of hiding it behind
+# IgnorePkg. Keep this if the PKGBUILD is ever re-fetched from the AUR.
+epoch=1
+
+# Short human-readable description shown by pacman.
+pkgdesc="Library for fingerprint readers, with SDCP support for EgisTec egismoc sensors"
+
+# Upstream project URL shown by pacman.
+url="https://github.com/TenSeventy7/libfprint-egismoc-sdcp"
+
+# CPU architectures this package can be built for.
+arch=(x86_64)
+
+# SPDX license identifier for the upstream project.
+license=(LGPL-2.1-or-later)
+
+# Libraries and tools that must be present at runtime.
+depends=(
+  gcc-libs      # GCC runtime libraries (libgcc_s, libstdc++)
+  glib2         # GLib core library (GObject, GIO, etc.)
+  glibc         # GNU C library
+  libgudev      # GObject wrapper around libudev, used for device detection
+  libgusb       # GObject wrapper around libusb, used for USB communication
+  openssl       # Cryptographic library required by the SDCP protocol
+  pixman        # Low-level pixel manipulation library used by some image drivers
+)
+
+# Tools and libraries needed only at build time, not at runtime.
+makedepends=(
+  git                    # Required to clone the source repository
+  glib2-devel            # GLib headers and glib-mkenums, needed by meson
+  gobject-introspection  # Generates GObject introspection data during build
+  meson                  # Build system used by libfprint
+)
+
+# Packages needed only to run the test suite (optional at runtime).
+checkdepends=(
+  cairo    # 2D graphics library used by some integration tests
+  umockdev # Mocks USB/udev devices for hardware-free testing
+)
+
+# Virtual packages this package satisfies, allowing it to fulfil dependencies
+# that other packages (e.g. fprintd) declare on libfprint or libfprint-2.so.
+provides=(libfprint 'libfprint-2.so=2-64')
+
+# Packages that cannot coexist with this one (same files on disk).
+conflicts=(libfprint)
+
+# Logical group this package belongs to; 'fprint' groups all fprint-related packages.
+groups=(fprint)
+
+# Source to fetch. The directory name is set explicitly without the -git suffix
+# to match the upstream repository name and keep build() and prepare() clean.
+source=("libfprint-egismoc-sdcp::git+https://github.com/TenSeventy7/libfprint-egismoc-sdcp.git")
+
+# Checksums for each source entry. SKIP is used for git sources since the
+# integrity is guaranteed by git itself.
+sha256sums=('SKIP')
+
+# Dynamically generates pkgver from the git history:
+# 'r' followed by the total commit count, a dot, and the short commit hash.
+# Example output: r1831.a2f3c1b
+pkgver() {
+  cd libfprint-egismoc-sdcp
+  printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+prepare() {
+  cd libfprint-egismoc-sdcp
+
+  # fpi-sdcp-device.c uses OpenSSL EVP_* functions but meson.build only links
+  # OpenSSL for the 'uru4000' driver via driver_helper_mapping. Without this fix
+  # the linker fails with dozens of undefined references to OpenSSL symbols.
+  # Applied defensively in case TenSeventy7 incorporates the fix upstream.
+  if ! grep -q "'egismoc' : \[ 'openssl' \]" meson.build; then
+    sed -i "/'uru4000' : \[ 'openssl' \],/a\\    'egismoc' : [ 'openssl' ]," meson.build
+  fi
+
+  # Upstream bug: egismoc_close() never clears self->task_ssm, so if a verify
+  # is torn down mid-flight (e.g. the "Timed out trying to detect finger"
+  # path), the pointer survives the close. The next egismoc_open() then trips
+  # g_assert (self->task_ssm == NULL) and fprintd dies with SIGABRT, which in
+  # practice means every fingerprint prompt that times out kills the daemon.
+  # Clear the pointer on close, and downgrade the open-time assert to a
+  # recoverable warning so a stale SSM can never be fatal again.
+  python3 - <<'PYFIX'
+import io
+p = 'libfprint/drivers/egismoc/egismoc.c'
+s = io.open(p, encoding='utf-8').read()
+
+old_open = """  g_assert (self->task_ssm == NULL);
+  self->task_ssm = fpi_ssm_new (device, egismoc_dev_init_handler, DEV_INIT_STATES);"""
+new_open = """  if (self->task_ssm != NULL)
+    {
+      g_warning ("egismoc: stale task SSM found at open, clearing it");
+      self->task_ssm = NULL;
+    }
+  self->task_ssm = fpi_ssm_new (device, egismoc_dev_init_handler, DEV_INIT_STATES);"""
+assert old_open in s, "open anchor missing"
+s = s.replace(old_open, new_open, 1)
+
+old_close = """  egismoc_cancel (device);
+  g_clear_object (&self->interrupt_cancellable);
+
+  g_usb_device_release_interface (fpi_device_get_usb_device (device),"""
+new_close = """  egismoc_cancel (device);
+  g_clear_object (&self->interrupt_cancellable);
+
+  /* The SSM is owned and freed by its own completion callback; we only drop
+   * our reference so a torn-down task cannot poison the next open. */
+  self->task_ssm = NULL;
+
+  g_usb_device_release_interface (fpi_device_get_usb_device (device),"""
+assert old_close in s, "close anchor missing"
+s = s.replace(old_close, new_close, 1)
+
+io.open(p, 'w', encoding='utf-8').write(s)
+print("egismoc task_ssm lifetime fix applied")
+PYFIX
+
+  # Enrollments do not survive a reboot on SDCP sensors.
+  #
+  # The device binds its stored templates to the host public key it was paired
+  # with. fpi_sdcp_device_init_claim() caches the whole claim -- host keypair
+  # and derived session secrets -- to /var/lib/fprint/<drv>/<id>/sdcp-claim, but
+  # scopes it to the kernel boot_id. On the next boot the boot_id no longer
+  # matches, the file is deleted, and the generate_new: path calls
+  # fpi_sdcp_set_host_keys (self, NULL, NULL), minting a brand new random EC
+  # keypair. The sensor then sees an unfamiliar host, stops reporting the old
+  # enrollment IDs, and fprintd prunes them:
+  #
+  #   Deleted stored finger 2 for user <u> as it is unknown to device.
+  #
+  # The same happens after claim_expiration_seconds (24h) even without a reboot,
+  # and egismoc sets supports_reconnect = FALSE, so SDCP Reconnect never runs.
+  #
+  # Split the two things the cache holds. The session secrets really are stale
+  # after a reboot or an expiry and must be rederived; the host keypair is a
+  # long-lived identity and there is no reason to throw it away. Keep the key,
+  # drop the secrets, and leave is_connected FALSE so the driver performs a
+  # fresh SDCP Connect under the same identity -- which is what keeps the
+  # device's enrollments ours.
+  #
+  # The host private key was already being written to that file in the clear, so
+  # this does not put anything new on disk; it does extend how long those bytes
+  # stay useful to someone who can read them (root only: the parent directory is
+  # 0700). Delete the file to force a clean re-pair, at the cost of wiping the
+  # enrollments.
+  python3 - <<'PYSDCP'
+import io
+p = 'libfprint/fpi-sdcp-device.c'
+s = io.open(p, encoding='utf-8').read()
+
+old_decl = """  g_autofree gchar *cached_boot_id = NULL;
+  gint64 cached_connected_time;
+  gboolean read = FALSE;"""
+new_decl = """  g_autofree gchar *cached_boot_id = NULL;
+  gint64 cached_connected_time;
+  gboolean read = FALSE;
+  gboolean stale = FALSE;"""
+assert old_decl in s, "sdcp decl anchor missing"
+s = s.replace(old_decl, new_decl, 1)
+
+old_inval = """  if (!g_str_equal (cached_boot_id, sdcp_get_boot_id ()))
+    {
+      fp_dbg ("Cached SDCP claim is from previous boot %s and is no longer valid.", cached_boot_id);
+      fpi_sdcp_device_delete_cached_claim (self);
+      goto generate_new;
+    }
+
+  priv->claim_connected_time = cached_connected_time;
+
+  if (sdcp_is_claim_expired (self))
+    goto generate_new;"""
+new_inval = """  if (!g_str_equal (cached_boot_id, sdcp_get_boot_id ()))
+    {
+      fp_dbg ("Cached SDCP claim is from previous boot %s. Its session secrets "
+              "are stale, but the host identity is reusable.", cached_boot_id);
+      stale = TRUE;
+    }
+
+  priv->claim_connected_time = cached_connected_time;
+
+  if (!stale && sdcp_is_claim_expired (self))
+    {
+      fp_dbg ("Cached SDCP claim has expired. Reconnecting under the same host identity.");
+      stale = TRUE;
+    }"""
+assert old_inval in s, "sdcp invalidation anchor missing"
+s = s.replace(old_inval, new_inval, 1)
+
+# A stale claim needs a fresh host random (r_h is a per-Connect nonce); only
+# the keypair carries over.
+old_set = """  if (!fpi_sdcp_set_host_keys (self, private_key, random))
+    goto cache_init_failed;"""
+new_set = """  if (!fpi_sdcp_set_host_keys (self, private_key, stale ? NULL : random))
+    goto cache_init_failed;"""
+assert old_set in s, "sdcp set_host_keys anchor missing"
+s = s.replace(old_set, new_set, 1)
+
+old_after = """      fp_warn ("Public key in cached claim does not match cached private key's public bytes");
+      goto cache_init_failed;
+    }
+
+  /* set everything else in the claim */"""
+new_after = """      fp_warn ("Public key in cached claim does not match cached private key's public bytes");
+      goto cache_init_failed;
+    }
+
+  if (stale)
+    {
+      /* Host identity is restored but nothing else in the claim can be trusted.
+       * Returning with is_connected still FALSE makes the driver run a full
+       * SDCP Connect, which rederives the session secrets against the same
+       * pk_h -- so the device keeps recognising the enrollments it holds for
+       * us. The cache file is deliberately left in place: it is where that
+       * identity lives, and a successful Connect rewrites it with this boot's
+       * ID. */
+      return TRUE;
+    }
+
+  /* set everything else in the claim */"""
+assert old_after in s, "sdcp post-check anchor missing"
+s = s.replace(old_after, new_after, 1)
+
+io.open(p, 'w', encoding='utf-8').write(s)
+print("sdcp host identity persistence applied")
+PYSDCP
+
+  # Hibernate silently breaks fingerprint auth, and the boot_id check cannot see it.
+  #
+  # A successful suspend-to-disk power-cycles the sensor, so it loses its
+  # volatile SDCP session. The kernel boot_id does NOT change across S4, and the
+  # cached claim is under 24h old, so init_claim above finds it "current",
+  # restores the session secrets, sets is_connected TRUE and skips Connect. The
+  # device then identifies the finger correctly and the host cannot reproduce the
+  # Identify MAC:
+  #
+  #   Enrollment ID identified by the device: E7:01:63:...
+  #   SDCP AuthorizedIdentity verification failed.
+  #
+  # fprintd reports that as a device error rather than a failed match, and
+  # pam_fprintd treats a device error as fatal -- so authentication falls straight
+  # through to the password prompt on the first attempt, with nothing on screen
+  # explaining why. Observed 2026-08-22: broken for nine hours before anyone
+  # noticed.
+  #
+  # Recover using the machinery that already exists. Mark the cached claim
+  # expired and persist that, so the next init_claim takes the stale path: keep
+  # the host keypair, drop the session secrets, run a fresh Connect under the
+  # same identity. Deleting the cache would also force a Connect, but it mints a
+  # new keypair and the device stops recognising the enrollments.
+  python3 - <<'PYHIB'
+import io
+p = 'libfprint/fpi-sdcp-device.c'
+s = io.open(p, encoding='utf-8').read()
+
+old = """  } else {
+    fp_err ("SDCP AuthorizedIdentity verification failed.");
+    return FALSE;
+  }
+}"""
+new = """  } else {
+    fp_err ("SDCP AuthorizedIdentity verification failed.");
+
+    /* The device identified a finger but our MAC does not match, so the session
+     * secrets are stale while the cached claim still looks current. The usual
+     * cause is resume from hibernate: S4 power-cycles the sensor but the kernel
+     * boot_id is unchanged, so the staleness check in init_claim never fires.
+     *
+     * Expire the claim and persist that. The next init_claim then takes the
+     * stale path -- host keypair kept, session secrets dropped, fresh Connect
+     * under the same identity -- which is what keeps the device's enrollments
+     * ours. Deleting the cache would force a Connect too, but it mints a new
+     * keypair and the enrollments are lost with it.
+     *
+     * G_MININT64/2 rather than 0: claim_connected_time is compared against
+     * g_get_monotonic_time(), which starts near boot, so 0 would still look
+     * unexpired for the first 24h of uptime.
+     *
+     * Ordering: cache_connected_claim() asserts is_connected, so the claim must
+     * be rewritten before that flag is cleared. */
+    priv->claim_connected_time = G_MININT64 / 2;
+    fpi_sdcp_device_cache_connected_claim (device);
+    priv->is_connected = FALSE;
+
+    /* Clearing is_connected alone is not enough. fpi_sdcp_device_is_connected()
+     * keys off host_key, and init_claim() -- which is what mints a fresh r_h for
+     * the next Connect -- only re-runs when host_key is NULL. Leave it set and
+     * the recovery Connect reuses the r_h from the session that just died,
+     * losing the per-Connect freshness the nonce exists to provide.
+     *
+     * Drop the in-memory host key so the next claim re-reads the file we just
+     * marked expired, takes the stale path, and rederives the nonce under the
+     * same host identity. The keypair itself is safe on disk. */
+    g_clear_pointer (&priv->host_key, EVP_PKEY_free);
+    fp_info ("Invalidated the cached SDCP session; the next claim will reconnect "
+             "under the same host identity.");
+
+    return FALSE;
+  }
+}"""
+assert old in s, "authorized-identity failure anchor missing"
+s = s.replace(old, new, 1)
+io.open(p, 'w', encoding='utf-8').write(s)
+print("sdcp hibernate session-recovery applied")
+PYHIB
+
+  # A successful match is reported to fprintd as "no match".
+  #
+  # egismoc_identify_check_cb() reports the result with
+  # fpi_device_verify_report(FPI_MATCH_SUCCESS), then the SSM advances to
+  # IDENTIFY_COMPLETE_SENSOR_RESET to issue one more housekeeping command. But
+  # reporting a match makes libfprint cancel the ongoing operation, so that
+  # command dies with G_IO_ERROR_CANCELLED, the SSM is marked failed, and
+  # egismoc_task_ssm_done() calls fpi_device_action_error(). An action error
+  # discards the result that was already reported, and IDENTIFY_COMPLETE --
+  # which is what would have called fpi_device_verify_complete() -- is never
+  # reached. The journal shows the whole story in two lines:
+  #
+  #   report_verify_status: result verify-match
+  #   verify_cb: result verify-no-match
+  #
+  # Net effect: the sensor recognises the finger and the login still fails.
+  #
+  # There are two halves to this. The driver must not sit in another USB round
+  # trip after reporting, because fprintd cancels the operation the moment it
+  # sees the match, and libfprint's GTask has check-cancellable set, so a
+  # cancelled task propagates G_IO_ERROR_CANCELLED and throws away the
+  # FPI_MATCH_SUCCESS that fpi_device_verify_report() had already stored. So
+  # jump straight from the check callback to IDENTIFY_COMPLETE, where
+  # fpi_device_verify_complete() runs before the cancel can land. The trailing
+  # IDENTIFY_COMPLETE_SENSOR_RESET is dropped, which is safe: every identify
+  # already begins with IDENTIFY_SENSOR_RESET, so the sensor is reset before it
+  # is next used either way. (The driver's own comment above IDENTIFY_COMPLETE
+  # says as much about the other step Windows performs here.)
+  #
+  # The second half remembers that a result went out and treats a cancellation
+  # arriving after that point as the teardown it is rather than a failure of
+  # the action -- belt and braces for any path that still loses the race.
+  python3 - <<'PYMATCH'
+import io
+p = 'libfprint/drivers/egismoc/egismoc.c'
+s = io.open(p, encoding='utf-8').read()
+
+old_struct = """  GCancellable   *interrupt_cancellable;
+};"""
+new_struct = """  GCancellable   *interrupt_cancellable;
+  /* Set once a verify/identify result has been handed to libfprint, so that a
+   * cancellation arriving afterwards is not mistaken for the action failing. */
+  gboolean        result_reported;
+};"""
+assert old_struct in s, "struct anchor missing"
+s = s.replace(old_struct, new_struct, 1)
+
+old_done = """  g_clear_pointer (&self->enrolled_ids, g_ptr_array_unref);
+
+  if (error)
+    fpi_device_action_error (device, error);
+}"""
+new_done = """  g_clear_pointer (&self->enrolled_ids, g_ptr_array_unref);
+
+  /* Reporting a match causes libfprint to cancel whatever the driver still has
+   * in flight. That cancellation lands here as a failed SSM, and passing it to
+   * fpi_device_action_error() would throw away the result we already reported
+   * and turn a good match into verify-no-match. Complete cleanly instead. */
+  if (error && self->result_reported &&
+      g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+    {
+      FpiDeviceAction action = fpi_device_get_current_action (device);
+
+      fp_dbg ("Cancelled after the result was reported; completing normally");
+      g_clear_error (&error);
+      self->result_reported = FALSE;
+
+      if (action == FPI_DEVICE_ACTION_IDENTIFY)
+        fpi_device_identify_complete (device, NULL);
+      else if (action == FPI_DEVICE_ACTION_VERIFY)
+        fpi_device_verify_complete (device, NULL);
+      return;
+    }
+
+  self->result_reported = FALSE;
+
+  if (error)
+    fpi_device_action_error (device, error);
+}"""
+assert old_done in s, "task_ssm_done anchor missing"
+s = s.replace(old_done, new_done, 1)
+
+# Record every point at which a result leaves the driver.
+reports = [
+("""          if (found)
+            fpi_device_identify_report (device, g_ptr_array_index (prints, index), print, NULL);
+          else
+            fpi_device_identify_report (device, NULL, print, NULL);""",
+ """          if (found)
+            fpi_device_identify_report (device, g_ptr_array_index (prints, index), print, NULL);
+          else
+            fpi_device_identify_report (device, NULL, print, NULL);
+          self->result_reported = TRUE;"""),
+("""          if (fp_print_equal (verify_print, print))
+            fpi_device_verify_report (device, FPI_MATCH_SUCCESS, print, NULL);
+          else
+            fpi_device_verify_report (device, FPI_MATCH_FAIL, print, NULL);""",
+ """          if (fp_print_equal (verify_print, print))
+            fpi_device_verify_report (device, FPI_MATCH_SUCCESS, print, NULL);
+          else
+            fpi_device_verify_report (device, FPI_MATCH_FAIL, print, NULL);
+          self->result_reported = TRUE;"""),
+("""      if (fpi_device_get_current_action (device) == FPI_DEVICE_ACTION_VERIFY)
+        fpi_device_verify_report (device, FPI_MATCH_FAIL, NULL, NULL);
+      else
+        fpi_device_identify_report (device, NULL, NULL, NULL);""",
+ """      if (fpi_device_get_current_action (device) == FPI_DEVICE_ACTION_VERIFY)
+        fpi_device_verify_report (device, FPI_MATCH_FAIL, NULL, NULL);
+      else
+        fpi_device_identify_report (device, NULL, NULL, NULL);
+      self->result_reported = TRUE;"""),
+]
+for old, new in reports:
+    assert old in s, "report anchor missing: %s" % old.splitlines()[0]
+    s = s.replace(old, new, 1)
+
+# Report and complete without another command in between; see above.
+old_jump = """  fpi_ssm_next_state (self->task_ssm);
+}
+
+static void
+egismoc_identify_run_state (FpiSsm   *ssm,"""
+new_jump = """  /* Do not advance into IDENTIFY_COMPLETE_SENSOR_RESET here. fprintd cancels
+   * the operation as soon as the result is reported, and a cancellation landing
+   * while another command is in flight makes libfprint's GTask return
+   * G_IO_ERROR_CANCELLED instead of the match. Go straight to the state that
+   * calls fpi_device_verify_complete(). \*/
+  fpi_ssm_jump_to_state (self->task_ssm, IDENTIFY_COMPLETE);
+}
+
+static void
+egismoc_identify_run_state (FpiSsm   *ssm,"""
+assert old_jump in s, "identify jump anchor missing"
+s = s.replace(old_jump, new_jump, 1)
+
+# Start each identify/verify from a clean slate.
+old_start = """  fp_dbg ("Identify or Verify");
+  FpiDeviceEgisMoc *self = FPI_DEVICE_EGISMOC (device);
+"""
+new_start = """  fp_dbg ("Identify or Verify");
+  FpiDeviceEgisMoc *self = FPI_DEVICE_EGISMOC (device);
+
+  self->result_reported = FALSE;
+"""
+assert old_start in s, "identify_verify anchor missing"
+s = s.replace(old_start, new_start, 1)
+
+io.open(p, 'w', encoding='utf-8').write(s)
+print("match-reported-as-no-match fix applied")
+PYMATCH
+}
+
+build() {
+  # Options passed to meson when configuring the build.
+  local meson_options=(
+    -D drivers=egismoc      # Build only the egismoc driver instead of all drivers,
+                            # to avoid overwriting drivers provided by stock libfprint.
+    -D doc=false            # Skip documentation generation (requires gtk-doc).
+    -D gtk-examples=false   # Skip GTK demo applications.
+    -D installed-tests=false # Do not install the test binaries system-wide.
+  )
+
+  # arch-meson is an Arch Linux wrapper around 'meson setup' that applies
+  # the distro's standard flags, prefix, and optimization settings.
+  arch-meson libfprint-egismoc-sdcp build "${meson_options[@]}"
+
+  # Compile the configured build tree.
+  meson compile -C build
+}
+
+# Run the test suite. The --print-errorlogs flag shows the full log for any
+# failing test. Hardware-dependent tests will be skipped automatically.
+check() {
+  meson test -C build --print-errorlogs
+}
+
+# Install the build output into the fake root $pkgdir; pacman will then
+# package everything under that directory into the final .pkg.tar.zst.
+package() {
+  meson install -C build --destdir "$pkgdir"
+}
+
+# Vim modeline: sets indentation to 2 spaces and expands tabs to spaces,
+# matching the Arch Linux PKGBUILD coding style.
+# vim:set sw=2 sts=-1 et:

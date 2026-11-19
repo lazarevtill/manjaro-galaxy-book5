@@ -1,0 +1,8 @@
+# Re-apply platform power tuning whenever the charger is plugged or unplugged.
+SUBSYSTEM=="power_supply", KERNEL=="A[CD]*", ATTR{online}=="0|1", RUN+="/usr/local/sbin/gb5-power-tune.sh"
+
+# Battery level changes also matter now, not just the charger: the profile drops
+# to quiet at 50%. udev emits power_supply events on capacity changes, which
+# makes the switch prompt; the systemd timer is the backstop for when it does not.
+SUBSYSTEM=="power_supply", KERNEL=="BAT*", RUN+="/usr/local/sbin/gb5-power-profile.sh"
+SUBSYSTEM=="power_supply", KERNEL=="A[CD]*", RUN+="/usr/local/sbin/gb5-power-profile.sh"

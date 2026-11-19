@@ -1,0 +1,48 @@
+{
+  "storage-driver": "overlay2",
+  "features": {
+    "containerd-snapshotter": false
+  },
+  "ip": "127.0.0.1",
+  "dns": [
+    "100.76.231.97",
+    "1.1.1.1",
+    "1.0.0.1"
+  ],
+  "dns-search": [
+    "in.vpn"
+  ],
+  "exec-opts": [
+    "native.cgroupdriver=systemd"
+  ],
+  "log-driver": "local",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  },
+  "live-restore": true,
+  "userland-proxy": false,
+  "default-address-pools": [
+    {
+      "base": "172.20.0.0/14",
+      "size": 24
+    }
+  ],
+  "builder": {
+    "gc": {
+      "enabled": true,
+      "reservedSpace": "20GB",
+      "maxUsedSpace": "60GB",
+      "minFreeSpace": "40GB"
+    }
+  },
+  "max-concurrent-downloads": 6,
+  "max-concurrent-uploads": 5,
+  "default-ulimits": {
+    "nofile": {
+      "Name": "nofile",
+      "Soft": 65536,
+      "Hard": 524288
+    }
+  }
+}

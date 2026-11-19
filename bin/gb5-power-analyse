@@ -1,0 +1,152 @@
+#!/usr/bin/env python3
+"""Turn a gb5-power-log CSV into an honest power report.
+
+This encodes the four things this project learned the hard way. Each one
+produced a confident wrong answer before it was understood:
+
+  1. current_now is BIASED on this gauge, not merely imprecise. Integrating it
+     over 634 samples / 5.29 h gives 1699 mAh where charge_now decremented
+     2205 mAh -- a 23% disagreement between two registers of the same chip, which
+     sampling cannot explain. Runtimes come from integrating charge_now. Snapshot
+     figures, including the idle floor, are ~23% low in absolute terms and are
+     only trustworthy for ranking states against each other.
+
+  2. An idle floor is not a runtime. The quiet-moment median here is genuine, but
+     the machine is only that quiet 76-91% of the time, and extrapolating it
+     overstated runtime by 30%.
+
+  3. Count the gauge's steps. charge_now moves in 49 mAh jumps roughly every
+     445 s. Any window spanning fewer than ~8 steps is measuring the gauge, not
+     the machine, and must be reported as "not measurable" rather than as a
+     result.
+
+  4. Say what was running. The largest single wakeup source during the original
+     idle measurements was the agent taking them.
+
+  gb5-power-analyse [CSV ...]        default: /var/log/gb5-power*.csv
+"""
+import sys, glob, statistics as st
+
+STEP_UAH = 49000          # measured: charge_now moves in 49 mAh jumps
+MIN_STEPS = 8             # below this a window cannot resolve anything
+PACK_MAH = 4900.0
+
+
+def load(path):
+    hdr, rows = None, []
+    for line in open(path):
+        if line.startswith("#"):
+            continue
+        f = line.rstrip("\n").split(",")
+        if f and f[0] == "ts":
+            hdr = f
+            continue
+        if not hdr or len(f) != len(hdr):
+            continue
+        d = dict(zip(hdr, f))
+        try:
+            d["ts"] = int(d["ts"])
+            d["sys_w"] = float(d["sys_w"])
+            d["pkg_w"] = float(d["pkg_w"])
+            d["core_w"] = float(d["core_w"])
+            d["bat_pct"] = int(d["bat_pct"])
+            d["P_busy"] = float(d["P_busy"])
+            d["E_busy"] = float(d["E_busy"])
+            d["rc6_pct"] = float(d["rc6_pct"])
+            d["charge_uah"] = int(d.get("charge_uah", 0) or 0)
+            d["voltage_uv"] = int(d.get("voltage_uv", 0) or 0)
+        except (ValueError, KeyError):
+            continue
+        rows.append(d)
+    return rows
+
+
+def report(path, rows):
+    all_d = sorted((r for r in rows if r["bat_status"] == "Discharging"),
+                   key=lambda r: r["ts"])
+    # Split into contiguous discharging runs. A first-to-last delta across the
+    # whole file is wrong the moment the log contains a charging period or a
+    # hibernation gap: wall-clock keeps advancing while charge does not fall at
+    # the same rate, or rises. Segment on any gap longer than 4x the sample
+    # interval, and on charge going UP (which only happens across a charge).
+    segs, cur = [], []
+    for r in all_d:
+        if cur:
+            dt = r["ts"] - cur[-1]["ts"]
+            went_up = r["charge_uah"] > cur[-1]["charge_uah"] + STEP_UAH
+            if dt > 240 or went_up:
+                segs.append(cur)
+                cur = []
+        cur.append(r)
+    if cur:
+        segs.append(cur)
+    segs = [g for g in segs if len(g) >= 10]
+    print(f"\n\033[1m{path}\033[0m  {len(rows)} rows, {len(all_d)} discharging"
+          + (f", {len(segs)} contiguous run(s)" if len(segs) != 1 else ""))
+    if not segs:
+        print("  too little contiguous discharging data to say anything")
+        return
+    if len(segs) > 1:
+        print(f"  \033[2mlog is broken by charging or suspend; using the longest "
+              f"contiguous run of {max(len(g) for g in segs)} samples\033[0m")
+    disch = max(segs, key=lambda g: g[-1]["ts"] - g[0]["ts"])
+    span = (disch[-1]["ts"] - disch[0]["ts"]) / 3600
+
+    # ---- ground truth, if the charge counter was logged
+    have_q = disch[0]["charge_uah"] > 0 and disch[-1]["charge_uah"] > 0
+    if have_q:
+        dq_uah = disch[0]["charge_uah"] - disch[-1]["charge_uah"]
+        steps = dq_uah / STEP_UAH
+        volts = st.mean(r["voltage_uv"] for r in disch if r["voltage_uv"]) / 1e6
+        amps = (dq_uah / 1e6) / span if span else 0
+        err = 100.0 * (STEP_UAH / dq_uah) if dq_uah else 999
+        print(f"  window            {span:.2f} h")
+        print(f"  charge drop       {dq_uah/1000:.0f} mAh = {steps:.1f} steps of 49 mAh")
+        if steps < MIN_STEPS:
+            print(f"  \033[33mNOT MEASURABLE\033[0m — fewer than {MIN_STEPS} gauge steps; "
+                  f"resolution is +/-{err:.0f}%")
+            print("  this window is measuring the gauge, not the machine")
+        else:
+            # Quantisation is only one of three error terms. The mAh->Wh
+            # conversion assumes a mean voltage, and charge_full reads above the
+            # design capacity, so the gauge is optimistic by a few percent. Add
+            # 4% in quadrature for those rather than quoting quantisation alone.
+            tot = (err**2 + 4.0**2) ** 0.5
+            hrs = PACK_MAH / 1000 / amps
+            print(f"  \033[1mdrain            {amps*volts:5.2f} W  ->  "
+                  f"{hrs:4.1f} h  +/- {hrs*tot/100:.1f} h\033[0m"
+                  f"   (+/-{tot:.1f}%: {err:.1f}% quantisation, 4% systematic)")
+    else:
+        print(f"  window            {span:.2f} h  \033[33m(no charge counter in this file — "
+              f"snapshots only, expect a 17-22% under-report)\033[0m")
+
+    # ---- snapshots, labelled for what they are
+    sw = [r["sys_w"] for r in disch]
+    print(f"  snapshot mean     {st.mean(sw):5.2f} W   median {st.median(sw):5.2f} W")
+    if have_q and st.mean(sw) and steps >= MIN_STEPS:
+        print(f"  snapshot bias     {100*(st.mean(sw)-amps*volts)/(amps*volts):+.1f}%  "
+              f"\033[2m(expected ~-23%: current_now is biased low on this gauge)\033[0m")
+
+    q = [r for r in disch if r["P_busy"] < 2 and r["E_busy"] < 2]
+    if q:
+        print(f"  idle floor        {st.median([r['sys_w'] for r in q]):5.2f} W  "
+              f"\033[2m(quiet {100*len(q)/len(disch):.0f}% of samples — a floor, NOT a runtime)\033[0m")
+    print(f"  package           {st.median([r['pkg_w'] for r in disch]):5.2f} W   "
+          f"cores {st.median([r['core_w'] for r in disch]):4.2f} W   "
+          f"GPU RC6 {st.median([r['rc6_pct'] for r in disch]):.0f}%")
+
+
+def main():
+    paths = sys.argv[1:] or sorted(glob.glob("/var/log/gb5-power*.csv"))
+    if not paths:
+        sys.exit("no CSV found; is gb5-power-log running?")
+    for p in paths:
+        try:
+            report(p, load(p))
+        except Exception as e:
+            print(f"\n{p}: could not read — {e}")
+    print()
+
+
+if __name__ == "__main__":
+    main()

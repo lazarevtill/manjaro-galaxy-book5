@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=NetBird
+GenericName=VPN Client
+Comment=Connect, and switch networks, routes and exit nodes
+Exec=/usr/bin/netbird-ui
+Icon=netbird
+Terminal=false
+Categories=Network;Security;
+Keywords=VPN;WireGuard;NetBird;mesh;
+StartupNotify=false

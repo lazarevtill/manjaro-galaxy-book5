@@ -1,0 +1,14 @@
+diff --git a/src/lpmd_cpu.c b/src/lpmd_cpu.c
+index f4c9cbd..62e9923 100644
+--- a/src/lpmd_cpu.c
++++ b/src/lpmd_cpu.c
+@@ -24,6 +24,9 @@ static struct cpu_model_entry id_table[] = {
+ 		{ 6, 0xaa }, // Meteorlake
+ 		{ 6, 0xac }, // Meteorlake
+ 		{ 6, 0xb5 }, // ArrowLake
++		{ 6, 0xc5 }, // ArrowLake H  (added locally: same architecture as 0xb5,
++		              //  and core-type detection below is generic via CPUID leaf
++		              //  0x1a rather than per-model, so nothing else needs changing)
+ 		{ 6, 0xbd }, // Lunarlake
+ 		{ 6, 0xcc }, // Pantherlake
+ 		{ 0, 0 } // Last Invalid entry

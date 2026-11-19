@@ -1,0 +1,1230 @@
+<title>Galaxy Book5 Enablement</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+
+<style>
+  :root{
+    --paper:#f4f7f9;
+    --surface:#ffffff;
+    --surface-2:#eef2f6;
+    --ink:#131922;
+    --ink-2:#3a4653;
+    --muted:#5f6d7c;
+    --line:#dbe2ea;
+    --line-strong:#c3cedb;
+    --accent:#0a6c7d;
+    --accent-soft:#e0f0f3;
+    --ok:#256d45;
+    --ok-soft:#dcefe3;
+    --warn:#835c00;
+    --warn-soft:#f6ecd4;
+    --note:#4f46a8;
+    --note-soft:#e7e5f8;
+    --shadow:0 1px 2px rgba(19,25,34,.06), 0 8px 24px -16px rgba(19,25,34,.28);
+
+    --f-display:"IBM Plex Sans Condensed", ui-sans-serif, system-ui, sans-serif;
+    --f-body:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    --f-mono:"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#0c1016;
+      --surface:#141a22;
+      --surface-2:#1b232d;
+      --ink:#e6ecf2;
+      --ink-2:#c2ccd7;
+      --muted:#8e9dad;
+      --line:#242e3a;
+      --line-strong:#33404f;
+      --accent:#4cc4d8;
+      --accent-soft:#10333b;
+      --ok:#6cc994;
+      --ok-soft:#13301f;
+      --warn:#dcb055;
+      --warn-soft:#31280f;
+      --note:#a79bf2;
+      --note-soft:#211e3d;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#0c1016;
+    --surface:#141a22;
+    --surface-2:#1b232d;
+    --ink:#e6ecf2;
+    --ink-2:#c2ccd7;
+    --muted:#8e9dad;
+    --line:#242e3a;
+    --line-strong:#33404f;
+    --accent:#4cc4d8;
+    --accent-soft:#10333b;
+    --ok:#6cc994;
+    --ok-soft:#13301f;
+    --warn:#dcb055;
+    --warn-soft:#31280f;
+    --note:#a79bf2;
+    --note-soft:#211e3d;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--f-body);
+    font-size:16px;
+    line-height:1.62;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:64rem;margin:0 auto;padding:2.5rem 1.5rem 5rem;}
+
+  /* ---------- masthead ---------- */
+  .mast{
+    display:flex;flex-direction:column;gap:1.25rem;
+    padding-bottom:1.75rem;margin-bottom:2.5rem;
+    border-bottom:2px solid var(--line-strong);
+  }
+  .eyebrow{
+    font-family:var(--f-display);
+    font-size:.75rem;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--accent);margin:0;
+  }
+  h1{
+    font-family:var(--f-display);
+    font-size:clamp(2rem,5.2vw,3.1rem);
+    font-weight:700;line-height:1.04;letter-spacing:-.015em;
+    margin:0;text-wrap:balance;
+  }
+  .standfirst{
+    margin:0;max-width:60ch;color:var(--ink-2);font-size:1.075rem;
+  }
+  .specs{
+    display:grid;gap:.5rem 2rem;
+    grid-template-columns:repeat(auto-fit,minmax(13rem,1fr));
+    margin:0;padding:1rem 0 0;border-top:1px solid var(--line);
+  }
+  .specs div{display:flex;flex-direction:column;gap:.1rem}
+  .specs dt{
+    font-family:var(--f-display);font-size:.7rem;font-weight:600;
+    letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+  }
+  .specs dd{margin:0;font-family:var(--f-mono);font-size:.85rem;color:var(--ink)}
+
+  /* ---------- sections ---------- */
+  section{margin:0 0 3rem}
+  h2{
+    font-family:var(--f-display);
+    font-size:1.55rem;font-weight:700;letter-spacing:-.005em;
+    margin:0 0 .35rem;text-wrap:balance;
+  }
+  h2 .rule{display:block;width:2.25rem;height:3px;background:var(--accent);margin-bottom:.6rem;border-radius:2px}
+  h3{
+    font-family:var(--f-display);
+    font-size:1.075rem;font-weight:600;margin:1.75rem 0 .4rem;
+  }
+  .lede{color:var(--muted);margin:0 0 1.25rem;max-width:66ch}
+  p{max-width:68ch;margin:0 0 .9rem}
+  a{color:var(--accent);text-underline-offset:2px}
+  a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:3px}
+  code{
+    font-family:var(--f-mono);font-size:.86em;
+    background:var(--surface-2);border:1px solid var(--line);
+    padding:.08em .35em;border-radius:4px;white-space:nowrap;
+  }
+
+  /* ---------- ledger ---------- */
+  .scroller{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface);box-shadow:var(--shadow)}
+  table{border-collapse:collapse;width:100%;min-width:44rem;font-size:.92rem}
+  th,td{text-align:left;padding:.7rem .9rem;border-bottom:1px solid var(--line);vertical-align:top}
+  thead th{
+    font-family:var(--f-display);font-size:.7rem;font-weight:600;
+    letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+    background:var(--surface-2);white-space:nowrap;
+  }
+  tbody tr:last-child td{border-bottom:none}
+  td.sub{font-weight:600}
+  td.was{color:var(--muted)}
+  .mono{font-family:var(--f-mono);font-size:.82rem}
+
+  /* ---------- chips ---------- */
+  .chip{
+    display:inline-block;font-family:var(--f-display);
+    font-size:.68rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+    padding:.2rem .5rem;border-radius:4px;white-space:nowrap;
+  }
+  .chip.fix{background:var(--ok-soft);color:var(--ok)}
+  .chip.imp{background:var(--accent-soft);color:var(--accent)}
+  .chip.lim{background:var(--warn-soft);color:var(--warn)}
+  .chip.new{background:var(--note-soft);color:var(--note)}
+
+  /* ---------- callouts ---------- */
+  .card{
+    background:var(--surface);border:1px solid var(--line);
+    border-radius:10px;padding:1.1rem 1.25rem;box-shadow:var(--shadow);
+  }
+  .cards{display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(17rem,1fr));margin:1.25rem 0}
+  .card h4{
+    font-family:var(--f-display);font-size:.95rem;font-weight:700;margin:0 0 .3rem;
+  }
+  .card p{font-size:.92rem;margin:0;color:var(--ink-2);max-width:none}
+  .watch{
+    border-left:3px solid var(--warn);background:var(--warn-soft);
+    border-radius:0 8px 8px 0;padding:.9rem 1.1rem;margin:1.25rem 0;
+  }
+  .watch p{margin:0;color:var(--ink);font-size:.94rem;max-width:none}
+  .watch strong{font-family:var(--f-display)}
+
+  /* ---------- code ---------- */
+  pre{
+    margin:.75rem 0 1.25rem;padding:.9rem 1.1rem;
+    background:var(--surface-2);border:1px solid var(--line);
+    border-radius:8px;overflow-x:auto;
+  }
+  pre code{background:none;border:none;padding:0;white-space:pre;font-size:.84rem;line-height:1.7}
+  .cmt{color:var(--muted)}
+
+  /* ---------- lists ---------- */
+  ul.tight{margin:.4rem 0 1rem;padding-left:1.1rem;max-width:68ch}
+  ul.tight li{margin-bottom:.35rem}
+  ul.tight li::marker{color:var(--accent)}
+
+  dl.kv{display:grid;grid-template-columns:auto 1fr;gap:.4rem 1rem;margin:.5rem 0 1.25rem;font-size:.93rem}
+  dl.kv dt{font-family:var(--f-mono);font-size:.82rem;color:var(--accent);white-space:nowrap}
+  dl.kv dd{margin:0;color:var(--ink-2)}
+
+  footer{
+    margin-top:3.5rem;padding-top:1.25rem;border-top:1px solid var(--line);
+    color:var(--muted);font-size:.85rem;
+  }
+  @media (max-width:34rem){
+    .wrap{padding:1.75rem 1.1rem 3.5rem}
+    dl.kv{grid-template-columns:1fr;gap:.15rem}
+    dl.kv dd{margin-bottom:.5rem}
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="mast">
+    <p class="eyebrow">Hardware enablement record &middot; Aug&ndash;Nov 2026</p>
+    <h1>Galaxy Book5 Pro H on Manjaro</h1>
+    <p class="standfirst">Everything that was dead, degraded or unclaimed on this machine, what it took to fix, and the traps worth knowing if you are doing the same thing. Secure Boot is on, booting a signed unified kernel image through a systemd-boot menu; the camera runs entirely on the GPU; fingerprints now survive a reboot; a freeze reboots itself instead of hanging; updates, Flatpaks and the boot chain look after themselves. 133 of 135 automated checks passing, and the two failures are an empty fingerprint enrolment.</p>
+    <dl class="specs">
+      <div><dt>Machine</dt><dd>965XHD &middot; NT965XHW-A71AR</dd></div>
+      <div><dt>SoC</dt><dd>Core Ultra 7 255H (Arrow Lake-H)</dd></div>
+      <div><dt>Cores</dt><dd>6P + 8E + 2LP &middot; 30 GB</dd></div>
+      <div><dt>System</dt><dd>Manjaro 7.2.9 &middot; KDE Plasma Wayland</dd></div>
+    </dl>
+  </header>
+
+  <section>
+    <h2><span class="rule"></span>What changed</h2>
+    <p class="lede">Status reflects verified behaviour, not just installed packages &mdash; every row below was tested on the running system.</p>
+    <div class="scroller">
+      <table>
+        <thead>
+          <tr><th>Subsystem</th><th>Before</th><th>Now</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="sub">Fingerprint</td>
+            <td class="was">No stack installed; sensor unsupported by stock libfprint. Then: enrolments wiped on every reboot, and matches reported as failures</td>
+            <td>Enrolled, matching, and persistent across reboots. Unlocks login, lock screen, <code>sudo</code>, polkit</td>
+            <td><span class="chip fix">Fixed</span></td>
+          </tr>
+          <tr>
+            <td class="sub">Webcam</td>
+            <td class="was">Sensor failed to probe; later, apps saw only raw Bayer nodes; then 1080p at 6&nbsp;fps with second-long freezes</td>
+            <td>1920&times;1088 at a steady 30&nbsp;fps, hardware denoise, no pixel work on the CPU</td>
+            <td><span class="chip fix">Fixed</span></td>
+          </tr>
+          <tr>
+            <td class="sub">Camera effects</td>
+            <td class="was">Nothing &mdash; no Linux equivalent of Windows Studio Effects</td>
+            <td>Background blur on the NPU at 11.3&nbsp;ms/frame, offered as a second camera</td>
+            <td><span class="chip fix">Added</span></td>
+          </tr>
+          <tr>
+            <td class="sub">Boot menu</td>
+            <td class="was">No OS chooser; firmware timeout 0 and a UKI has no menu</td>
+            <td>systemd-boot, signed, with Manjaro preselected and a working Windows entry</td>
+            <td><span class="chip fix">Fixed</span></td>
+          </tr>
+          <tr>
+            <td class="sub">Speakers</td>
+            <td class="was">Silent &mdash; 3 of 4 amps never enumerated</td>
+            <td>All four MAX98390 amps bound and audible</td>
+            <td><span class="chip fix">Fixed</span></td>
+          </tr>
+          <tr>
+            <td class="sub">Video acceleration</td>
+            <td class="was">None &mdash; only the i965 driver, which has no Arrow Lake support</td>
+            <td>42 VA-API profiles incl. AV1 decode <em>and</em> encode</td>
+            <td><span class="chip fix">Fixed</span></td>
+          </tr>
+          <tr>
+            <td class="sub">GPU / NPU compute</td>
+            <td class="was">NPU firmware loaded but no userspace; no OpenCL</td>
+            <td>OpenCL 3.0 (128 EUs), Level Zero on both GPU and NPU</td>
+            <td><span class="chip new">New</span></td>
+          </tr>
+          <tr>
+            <td class="sub">Thermals</td>
+            <td class="was">Firmware-only control; <code>thermald</code> absent</td>
+            <td>thermald active and managing Intel DPTF</td>
+            <td><span class="chip imp">Improved</span></td>
+          </tr>
+          <tr>
+            <td class="sub">Power</td>
+            <td class="was">One fixed profile regardless of power source</td>
+            <td>Auto-switches: performance on AC, balanced on battery</td>
+            <td><span class="chip imp">Improved</span></td>
+          </tr>
+          <tr>
+            <td class="sub">Memory</td>
+            <td class="was">Disk swap only; 6 GB dirty-page ceiling</td>
+            <td>7.7 GB zstd zram at priority 100; bounded writeback</td>
+            <td><span class="chip imp">Improved</span></td>
+          </tr>
+          <tr>
+            <td class="sub">OLED panel</td>
+            <td class="was">8-bit colour, SDR, fixed 120 Hz, manual brightness</td>
+            <td>10-bit via DSC, HDR + wide gamut, adaptive sync, light-sensor brightness</td>
+            <td><span class="chip imp">Improved</span></td>
+          </tr>
+          <tr>
+            <td class="sub">Secure Boot</td>
+            <td class="was">Off; enabling it dropped the machine to grub rescue</td>
+            <td>On, with custom keys. Microsoft and Samsung certificates preserved</td>
+            <td><span class="chip fix">Done</span></td>
+          </tr>
+          <tr>
+            <td class="sub">Boot chain</td>
+            <td class="was">GRUB refuses the kernel under Secure Boot, unfixably</td>
+            <td>Signed Unified Kernel Image booted straight from firmware; GRUB kept as a Secure-Boot-off rescue</td>
+            <td><span class="chip fix">Replaced</span></td>
+          </tr>
+          <tr>
+            <td class="sub">Sleep</td>
+            <td class="was">Never measured</td>
+            <td>91% of a suspend cycle in S0ix, reaching the deepest substate</td>
+            <td><span class="chip fix">Verified</span></td>
+          </tr>
+          <tr>
+            <td class="sub">Fingerprint tooling</td>
+            <td class="was">Command line only, opaque result codes</td>
+            <td>A packaged desktop app for enrolling, testing and removing fingers</td>
+            <td><span class="chip new">New</span></td>
+          </tr>
+          <tr>
+            <td class="sub">Peripherals</td>
+            <td class="was">Never audited</td>
+            <td>Fn keys, touchscreen, mic beamforming, BT codecs all verified working</td>
+            <td><span class="chip fix">Verified</span></td>
+          </tr>
+          <tr>
+            <td class="sub">Touchpad</td>
+            <td class="was">Gestures fine; tap-to-click off</td>
+            <td>5-finger capable; 2/3-finger tap buttons enabled</td>
+            <td><span class="chip imp">Improved</span></td>
+          </tr>
+          <tr>
+            <td class="sub">Snapshots</td>
+            <td class="was">Pre-upgrade only; every time-based schedule off, and no cron entry to fire them</td>
+            <td>Boot and daily snapshots armed, BTRFS mode pinned so the GUI cannot switch it to rsync</td>
+            <td><span class="chip imp">Improved</span></td>
+          </tr>
+          <tr>
+            <td class="sub">Wi-Fi</td>
+            <td class="was">Regulatory domain unset &mdash; country 00, the world fallback</td>
+            <td>Set to the local domain. 6 GHz stays firmware-blocked; see below</td>
+            <td><span class="chip lim">Partly</span></td>
+          </tr>
+          <tr>
+            <td class="sub">Stale drivers</td>
+            <td class="was">Four obsolete Xorg DDX drivers installed</td>
+            <td>Removed &mdash; nothing depended on them</td>
+            <td><span class="chip imp">Improved</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="rule"></span>Fingerprint</h2>
+    <p>The reader is an Egis&nbsp;/&nbsp;LighTuning <code>1c7a:05a5</code> (ETU906Axx-E). Stock libfprint 1.94.100 does <em>not</em> carry it &mdash; the runtime device table stops at <code>05a1</code> and <code>05ae</code>. It needs the SDCP-capable fork, which lists this exact ID with a 15-stage enrolment profile.</p>
+    <p>Two packaging problems had to be solved on the way: the AUR PKGBUILD declared <code>provides=(libfprint-2.so)</code> without the version, so pacman refused to satisfy fprintd's dependency; and the driver itself had a genuine crash bug.</p>
+
+    <div class="watch">
+      <p><strong>Upstream bug fixed locally.</strong> <code>egismoc_close()</code> never cleared <code>self-&gt;task_ssm</code>. Any verify that timed out left the pointer dangling, and the next open hit <code>g_assert(self-&gt;task_ssm == NULL)</code> &mdash; so every fingerprint prompt you ignored killed fprintd with SIGABRT. The build now clears it on close and downgrades the assert to a warning. This patch lives in the PKGBUILD's <code>prepare()</code> and must survive any re-fetch from the AUR.</p>
+    </div>
+
+    <h3>Where it works</h3>
+    <dl class="kv">
+      <dt>SDDM</dt><dd>Boot login screen</dd>
+      <dt>kde-fingerprint</dt><dd>Plasma lock screen &mdash; shipped by kscreenlocker, no edit needed</dd>
+      <dt>sudo</dt><dd>Terminal privilege escalation</dd>
+      <dt>polkit-1</dt><dd>Every graphical &ldquo;allow this action&rdquo; prompt</dd>
+      <dt>login</dt><dd>TTY console</dd>
+    </dl>
+    <p>Each is wired as <code>-auth sufficient pam_fprintd.so</code>. The leading dash means a missing module is skipped rather than fatal, and <em>sufficient</em> means failure falls straight through to your password &mdash; verified by testing all four stacks with correct and incorrect passwords against a throwaway account.</p>
+    <p><code>su</code> was deliberately left alone: it authenticates as the <em>target</em> account, and root has no enrolled print, so it would fall back to a password anyway.</p>
+
+    <h3>The phantom update, fixed at the source</h3>
+    <p>The AUR package declares a placeholder <code>pkgver=0</code>, and pacman ranks a numeric segment above an alphabetic one — so <span class="mono">0-1</span> outranks the real <span class="mono">r1831.&lt;hash&gt;</span> and every update check reported an upgrade that would have silently dropped both local patches. That was first hidden behind <code>IgnorePkg</code>; it is now fixed properly with <code>epoch=1</code>, so <span class="mono">1:r1831&hellip;</span> outranks the placeholder unconditionally. The pin was removed as redundant.</p>
+
+    <h3>Enrolment now survives a reboot</h3>
+    <p>Every reboot used to log <span class="mono">Deleted stored finger 7 &hellip; as it is unknown to device</span>. This is a match-on-chip reader &mdash; templates live on the sensor, bound to a host keypair. libfprint&rsquo;s <code>fpi_sdcp_device_init_claim()</code>, caches that keypair to disk but scopes the whole cache to the kernel boot ID, so the next boot deletes it and takes the <span class="mono">generate_new:</span> path, minting a fresh random EC keypair. The sensor then sees a stranger, stops reporting the enrolment IDs, and fprintd prunes its own records to match. The same happens after the 24-hour claim expiry without any reboot at all.</p>
+    <p>That file conflates two things with very different lifetimes. The session secrets really are stale after a reboot; the keypair is a long-lived identity and there is no reason to discard it. The patch keeps the keypair, drops the secrets, and leaves <code>is_connected</code> false so a full SDCP <em>Connect</em> runs under the same <span class="mono">pk_h</span>. Verified across a real reboot: the claim from the previous boot was reused and the device returned enrolment ID <span class="mono">E7:01:63:2A:0D:7A&hellip;</span>, matching the host&rsquo;s stored print byte for byte.</p>
+
+    <div class="watch">
+      <p><strong>The host private key was already on disk in the clear</strong> before this change &mdash; the patch adds nothing new to the filesystem, but it does extend how long those bytes stay useful to anyone who can read them. The directory is <span class="mono">0700</span> root. Deleting the cache file forces a clean re-pair, at the cost of the enrolments.</p>
+    </div>
+
+    <h3>A match that was reported as a failure</h3>
+    <p>With that fixed, the sensor recognised the finger and the login still failed. The journal told the whole story in two lines: <span class="mono">report_verify_status: result verify-match</span>, then <span class="mono">verify_cb: result verify-no-match</span>.</p>
+    <p>The driver reports the result, then advances to a housekeeping state to issue one more command. But reporting a match makes libfprint cancel whatever is still in flight, so that command dies with <span class="mono">G_IO_ERROR_CANCELLED</span>, the state machine is marked failed, and <code>egismoc_task_ssm_done()</code> hands it to <code>fpi_device_action_error()</code> &mdash; which discards the result already reported and never reaches the state that would have called <code>fpi_device_verify_complete()</code>. The fix jumps straight from the check callback to <span class="mono">IDENTIFY_COMPLETE</span>, skipping the trailing sensor reset; that is safe because every identify already begins with one.</p>
+
+    <div class="watch">
+      <p><strong>Two ways this hides from you.</strong> <code>fprintd-list</code> reads fprintd&rsquo;s own record, not the sensor &mdash; it will happily list fingers the device has already forgotten, because the two are only reconciled when a match is attempted <em>and fails</em>. And a successful verify logs nothing at all, so an empty log is not evidence of failure. Judge from <span class="mono">report_verify_status</span>, or from what the client actually shows.</p>
+    </div>
+
+    <h3>A proper app for this</h3>
+    <p>Enrolment is the part the command line handles badly: bare result codes, no sense of progress. The reader reports both a step count and a reason for every rejected scan, which is enough to build something followable. <strong>Fingerprint</strong> is now installed as a packaged application &mdash; a progress ring counting real steps against the reader's own total, rejection reasons in plain language, and a timeout that says <em>No finger detected</em> rather than <span class="mono">verify-unknown-error</span>.</p>
+    <p>Live operations drive the <code>fprintd-*</code> helpers and parse their per-stage output; listing and deleting use synchronous D-Bus. That split avoids running a GLib main loop beside Qt's just to receive two signals.</p>
+
+    <h3>Adding more fingers</h3>
+    <pre><code>fprintd-enroll -f left-index-finger
+fprintd-list $USER          <span class="cmt"># see what's enrolled</span>
+fprintd-delete $USER        <span class="cmt"># start over</span></code></pre>
+    <p>Rest the fingertip still for about a second per stage. Rapid tapping produces partial reads and <code>verify-no-match</code>.</p>
+  </section>
+
+  <section>
+    <h2><span class="rule"></span>Webcam</h2>
+    <p>The OV02E10 sensor was failing at probe with <span class="mono">external clock 26000000 is not supported</span>. The in-tree driver only accepts 19.2&nbsp;MHz; this board feeds it 26&nbsp;MHz. That is a per-board property, not a platform one.</p>
+    <p>A DKMS module built from the matching v7.1.8 driver source carries three changes:</p>
+    <ul class="tight">
+      <li>Accept the 26&nbsp;MHz clock alongside 19.2&nbsp;MHz.</li>
+      <li>Force a 180&deg; hardware readout. The module is mounted upside-down, but ipu-bridge reports rotation 0 from ACPI, so libcamera never asks for the flip &mdash; and actively resets the flip controls on every configure. Asserting it in the driver is the only place it sticks.</li>
+      <li>Advertise <code>SRGGB10</code> instead of <code>SGRBG10</code>. The sensor shifts its Bayer phase on one axis only when flipped, so the textbook derivation (<code>SGBRG10</code>) is wrong &mdash; it renders red hair as green. The correct order was found by testing all four and matching channel means against a known-good capture.</li>
+    </ul>
+    <p>Through PipeWire, applications see two real sources: <strong>Built-in Front Camera</strong> (libcamera directly) and <strong>Integrated Camera</strong> (the relay loopback), plus <strong>StudioEffects</strong> when the NPU blur is running. The ~48 raw <code>ipu6</code> entries in <code>wpctl</code> are internal device objects that expose no sources, so no picker shows them.</p>
+
+    <h3>Getting applications to actually see it</h3>
+    <p>Fixing the driver was only half of it. The IPU6 publishes about 48 raw Bayer capture nodes, and every one of them advertises itself as a video capture device. An application scanning <code>/dev/video*</code> picks one, starts the sensor &mdash; the privacy light comes on &mdash; and then renders nothing, because only libcamera can debayer that data. It looks exactly like a broken camera.</p>
+    <p>There are now three working routes, all verified:</p>
+    <dl class="kv">
+      <dt>PipeWire</dt><dd>Snapshot, Firefox, Chromium. The best default &mdash; no bridge involved.</dd>
+      <dt>libcamerasrc</dt><dd>Any GStreamer pipeline that names it explicitly. Captured 1008 frames cleanly.</dd>
+      <dt>Integrated Camera</dt><dd>A loopback fed on demand by <code>v4l2-relayd</code>, for apps that open a device path directly &mdash; Zoom, OBS, Discord. Find it by that card name: its <span class="mono">/dev/videoN</span> number changes between boots.</dd>
+    </dl>
+    <p>The raw nodes are now hidden from application enumeration, so only the working device is offered. libcamera is unaffected: it walks the media graph rather than reading that metadata.</p>
+
+    <div class="watch">
+      <p><strong>Two traps in the bridge, both silent.</strong> The shipped relay unit sets a <code>DeviceAllow</code> whitelist &mdash; and once that is set at all, anything absent is denied. <span class="mono">/dev/dma_heap/system</span> was absent, so libcamera could not get a dma-buf provider, quietly disabled software debayering, and emitted a flat grey frame. Separately, libcamera outputs 1928&times;1088 while the relay asked for 1280&times;720, and the stock pipeline has <code>videoconvert</code> but no scaler, so negotiation failed without an error. Both are fixed; both would have read as &ldquo;the camera is broken&rdquo;.</p>
+    </div>
+
+    <p><strong>One app remains broken:</strong> <code>pantheon-camera</code> hangs. It enumerates through GStreamer's device monitor, which offers only the libcamera device, and it cannot drive it. Not worth chasing &mdash; use Snapshot.</p>
+
+    <h3>The picture was noisy because the sensor was running 35% too fast</h3>
+    <p>Accepting the faster clock without re-timing the PLL meant the whole clock tree ran 26&nbsp;&divide;&nbsp;19.2 = 1.354&times; fast: 40.62&nbsp;fps measured, from a mode named <span class="mono">30fps</span>. Exposure is set in <em>lines</em>, so a shorter frame is a shorter maximum exposure &mdash; 24.6&nbsp;ms instead of 33.3&nbsp;ms. Indoors the auto-exposure ran out of exposure and bought the rest with gain. The proof was sitting in the controls:</p>
+    <pre><code>exposure       max=2242  value=2242   <span class="cmt"># pinned at maximum</span>
+analogue_gain  max=248   value=193    <span class="cmt"># 12.1x, register is 4.4 fixed point</span></code></pre>
+    <p>Rather than re-derive PLL dividers that are not public, add blanking: <code>vts_def</code> 2244 &rarr; 3039, which is 2244 &times; 48.75/36. <code>vts_min</code> stays at 2244 so the faster rate is still reachable.</p>
+    <div class="scroller">
+      <table>
+        <thead><tr><th>&nbsp;</th><th>Before</th><th>After</th></tr></thead>
+        <tbody>
+          <tr><td class="sub">Frame rate</td><td class="was">40.62 fps</td><td>30.01 fps</td></tr>
+          <tr><td class="sub">Max exposure</td><td class="was">2242 lines</td><td>3037 lines</td></tr>
+          <tr><td class="sub">Analogue gain, same room</td><td class="was">193 (12.1&times;)</td><td>144 (9.0&times;)</td></tr>
+          <tr><td class="sub">High-frequency energy</td><td class="was">6.14</td><td>4.70</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Same light, 25% less gain &mdash; and the advertised 30&nbsp;fps is now true. Note that <code>vblank</code> cannot be used as a runtime knob for this: the driver reapplies <code>vts_def</code> on every <span class="mono">set_fmt</span>, and libcamera caches the exposure range at configure time, so a mid-stream change is accepted, ignored, then reset.</p>
+
+    <h3>Second-long freezes, and the one-second clause behind them</h3>
+    <p>A denoise filter added against the remaining noise collapsed the bridge to 6.1&nbsp;fps with inter-frame gaps of 466&nbsp;ms at p90 and 1041&nbsp;ms at worst. That number is not arbitrary. <code>GstBaseSink</code> carries an emergency escape hatch:</p>
+    <pre><code><span class="cmt">/* !!emergency!!, if we did not receive anything valid for more than a
+   second, render it anyway so the user sees something */</span></code></pre>
+    <p>Every frame was late, so every frame was dropped &mdash; except one per second, which that clause renders anyway. One second rounded up to the next 33.3&nbsp;ms frame is 1033&nbsp;ms.</p>
+    <p>The frames were late because <code>v4l2-relayd</code> runs two separate pipelines and copies buffers between them carrying their original capture timestamps, while the output pipeline&rsquo;s only source is a live <code>appsrc</code> with <span class="mono">min-latency 0</span>. The output side has no idea the input side exists, so every millisecond of capture is undeclared lateness against <code>v4l2sink</code>&rsquo;s budget of roughly 38&nbsp;ms. And relayd&rsquo;s bus watch handles only <span class="mono">ERROR</span> and <span class="mono">STATE_CHANGED</span>, so the warning GStreamer posts about it is discarded: the whole thing fails silently.</p>
+
+    <div class="watch">
+      <p><strong>Adding a queue makes it worse, not better.</strong> A queue adds delay, so <em>every</em> frame takes the emergency path &mdash; 1.4&nbsp;fps &mdash; near enough one frame per emergency render. The instinct to buffer your way out of this is exactly wrong.</p>
+    </div>
+
+    <h3>The fix: move the whole pipeline onto the GPU</h3>
+    <p>The iGPU&rsquo;s VEBOX fixed-function unit does colour conversion, scaling and noise reduction at effectively no CPU cost. It needs the <code>gst-plugin-va</code> package, which was not installed.</p>
+    <pre><code>VIDEOSRC="libcamerasrc ! vapostproc ! video/x-raw(memory:VAMemory),format=NV12 \
+          ! vapostproc denoise=64 sharpen=0 disable-passthrough=true"</code></pre>
+    <p>Two <code>vapostproc</code> stages, deliberately: <strong>VEBOX denoise is silently a no-op when the input surface is RGB</strong>, and libcamera&rsquo;s software ISP hands out BGRx. Measured across <span class="mono">denoise=0/16/32/48/64</span> on RGB input, spatial noise stayed flat at 5.33&ndash;5.35 &mdash; the filter was running and doing nothing. The first stage converts to NV12 on the GPU; only then does denoise engage.</p>
+    <p>Result over 300 consecutive frames: 30.00&nbsp;fps, gap median 33.3&nbsp;ms, p99 34.9&nbsp;ms, worst 39.1&nbsp;ms, zero gaps over 100&nbsp;ms. Spatial noise about 10% below the CPU chain, at 20% of a core instead of 24%. Better picture, fewer stalls, less power.</p>
+
+    <div class="watch">
+      <p><strong>The plain CPU chain was never safe either.</strong> It sat 0&ndash;2&nbsp;ms inside that 38&nbsp;ms budget, and a paired A/B caught it falling off &mdash; 11.85&nbsp;fps, p99 1033.5&nbsp;ms &mdash; in one round of three, with no filter present at all. A drop-in adding <code>sync=false</code> to <code>v4l2sink</code> removes the deadline rather than hoping to stay under it. Nothing paces the relay afterwards except the live 30&nbsp;fps source, which is the correct pacing: this is a relay, not a player.</p>
+    </div>
+
+    <h3>Never end VIDEOSRC with a capsfilter</h3>
+    <p><code>gst_parse_launch</code> rejects a description ending in caps. relayd then calls <code>gst_element_set_state()</code> on NULL and only the splash frame ever reaches the loopback &mdash; a silent failure that looks like a dead camera.</p>
+
+    <h3>49 cameras in the picker</h3>
+    <p>Every one of the IPU6&rsquo;s ~48 raw nodes reports <span class="mono">V4L2_CAP_VIDEO_CAPTURE</span>. The udev rule hides them from anything that consults udev, but browsers open device nodes directly and ignore it, so Firefox and Chromium both list 49 &ldquo;cameras&rdquo; of which 48 produce nothing. Routing them through PipeWire cuts the list to the two real sources: <code>media.webrtc.camera.allow-pipewire</code> for Firefox, <span class="mono">--enable-features=WebRtcPipeWireCamera</span> for Chromium and Brave.</p>
+  </section>
+
+  <section>
+    <h2><span class="rule"></span>Camera effects on the NPU</h2>
+    <p class="lede">Windows gets background blur from Samsung&rsquo;s Studio Effects, running on the NPU. The Linux equivalent is <a href="https://github.com/ericjchang/linux-studio-effects">linux-studio-effects</a>: MODNet segmentation through OpenVINO on the NPU, composited and published as a second virtual camera.</p>
+    <div class="cards">
+      <div class="card">
+        <h4>Inference</h4>
+        <p>MODNet FP16 at 256&times;256 runs <strong>11.3&nbsp;ms/frame</strong> on the NPU &mdash; half what the project&rsquo;s README quotes. Compile takes 0.6&nbsp;s.</p>
+      </div>
+      <div class="card">
+        <h4>Pipeline</h4>
+        <p>30&nbsp;fps steady, 31&nbsp;ms of work per frame. Appears as <strong>StudioEffects</strong> alongside the unprocessed camera.</p>
+      </div>
+    </div>
+    <p>It did not work out of the box. Four defects, all fixed locally and worth sending upstream:</p>
+    <ul class="tight">
+      <li><strong>1&nbsp;fps.</strong> Per-stage timing showed <code>cap.read()</code> taking 976&nbsp;ms while the real work took 31&nbsp;ms. A V4L2 device hands out a small buffer ring; read it in a tight loop and each read costs the true frame interval, but do 30&nbsp;ms of work between reads and the reads themselves begin to block &mdash; 274&nbsp;ms, then 977&nbsp;ms, degrading as the consumer falls behind. Draining the camera in its own thread and taking the newest frame fixes it: <strong>1.0 &rarr; 30&nbsp;fps</strong>.</li>
+      <li><strong>Backend guessing.</strong> <code>cv2.VideoCapture(index)</code> without a backend lets OpenCV&nbsp;5 try GStreamer first, which fails on a loopback that already has a producer &mdash; and reports it as &ldquo;camera busy/unavailable&rdquo;, sending you after a conflict that does not exist.</li>
+      <li><strong>Requesting a size the device does not offer.</strong> It does not fail loudly: the device keeps its own format and every read then stalls about a second, which reads as slow hardware rather than a rejected request.</li>
+      <li><strong>Full-resolution Gaussian blur.</strong> 51 taps over 1920&times;1088&times;3 costs more than the NPU segmentation it accompanies. Blurring a quarter-size copy is visually identical &mdash; the detail discarded is precisely what the blur exists to destroy.</li>
+    </ul>
+    <div class="watch">
+      <p><strong>Two setup traps specific to this laptop.</strong> The project pins its virtual camera to <span class="mono">/dev/video10</span>, which here is <em>Intel IPU6 ISYS Capture 9</em>. And v4l2loopback was already loaded with one device for the camera bridge, so the setup script saw the module present, returned success, and created nothing. Load it with two devices and pin the effects one well clear of the IPU6&rsquo;s range.</p>
+    </div>
+    <p>It is deliberately not a background service. Blur only matters during a call, and leaving it running keeps the camera powered and the privacy light on.</p>
+  </section>
+
+  <section>
+    <h2><span class="rule"></span>Speakers</h2>
+    <p>Four MAX98390 amplifiers sit on I²C bus 2 at <code>0x38</code>, <code>0x39</code>, <code>0x3c</code>, <code>0x3d</code> &mdash; two woofers, two tweeters. ACPI only enumerates the first, and no kernel quirk exists for this subsystem ID (<code>0x144dc904</code>), so nothing bound and the kernel reported <span class="mono">speaker_outs=0</span>. Audio routed to the ALC298 pin and died there.</p>
+    <p>A DKMS side-codec driver plus a boot service that creates the three missing I²C devices brings all four online.</p>
+    <div class="cards">
+      <div class="card">
+        <h4>Idle power</h4>
+        <p>The amps stay powered continuously. The HDA component-master quirk that would idle them does not exist upstream yet, so expect a small constant draw.</p>
+      </div>
+      <div class="card">
+        <h4>Tonality</h4>
+        <p>Thinner than Windows, which applies vendor DSP and speaker-protection tuning Linux has no equivalent for. EasyEffects closes much of the gap.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="rule"></span>Graphics, compute and power</h2>
+
+    <h3>Video acceleration was completely absent</h3>
+    <p>The only VA-API driver present was <code>libva-intel-driver</code> &mdash; the legacy i965 backend, which has no Arrow Lake support at all. Every video decode was running on the CPU. Replacing it with <code>intel-media-driver</code> yields 42 hardware profiles, including AV1 decode and encode. This is the single biggest change for battery life and fan noise during video playback.</p>
+    <p>Also removed: <code>xf86-video-intel</code>, <code>-amdgpu</code>, <code>-ati</code> and <code>-nouveau</code>. All deprecated, all useless under Wayland, and <code>xf86-video-intel</code> is actively harmful on modern Intel. Nothing depended on them.</p>
+
+    <h3>Division of labour, so nothing fights</h3>
+    <p>Power management is deliberately split between two owners:</p>
+    <dl class="kv">
+      <dt>power-profiles-daemon</dt><dd>Owns the intel_pstate EPP hint and the ACPI platform profile. KDE PowerDevil switches its profile per power source.</dd>
+      <dt>gb5-power-tune.sh</dt><dd>Owns <em>only</em> what PPD does not touch: HWP dynamic boost and PCIe ASPM policy. Fires from a udev rule on charger plug/unplug, at boot, and again after every resume.</dd>
+    </dl>
+
+    <div class="watch">
+      <p><strong>Do not install TLP, tuned or auto-cpufreq.</strong> They take over the same knobs power-profiles-daemon owns, and PPD is what KDE's battery applet drives. Adding one will produce contradictory, hard-to-debug behaviour.</p>
+    </div>
+
+    <h3>On the hybrid scheduler</h3>
+    <p>The topology is 6 P-cores at 5.1&nbsp;GHz (cpu0&ndash;5), 8 E-cores at 4.4&nbsp;GHz (cpu6&ndash;13) and 2 low-power E-cores at 2.5&nbsp;GHz with no L3 (cpu14&ndash;15). The kernel uses hybrid capacity scaling rather than ITMT, so <code>/proc/sys/kernel/sched_itmt_enabled</code> legitimately does not exist here. That is correct behaviour, not a missing setting &mdash; worth knowing before someone tries to &ldquo;fix&rdquo; it.</p>
+  </section>
+
+  <section>
+    <h2><span class="rule"></span>Sleep and idle power</h2>
+    <p class="lede">Measured on a real suspend cycle rather than inferred from settings &mdash; the residency counters only advance while actually suspended, so nothing here can be checked from a running desktop.</p>
+
+    <p>The only sleep state is <code>s2idle</code>. That is correct and not a limitation: Arrow Lake removed S3 entirely, so modern standby is the sole path, and its quality depends on whether the SoC actually reaches its low-power substates rather than merely idling.</p>
+
+    <h3>What a 31-second suspend looked like</h3>
+    <div class="scroller">
+      <table>
+        <thead><tr><th>Measure</th><th>Result</th><th>Reading</th></tr></thead>
+        <tbody>
+          <tr><td class="sub">Time suspended</td><td class="mono">31.1 s</td><td>RTC-triggered wake, undisturbed</td></tr>
+          <tr><td class="sub">S0ix residency</td><td class="mono">28.3 s &mdash; 91%</td><td>The remaining ~2.7 s is entry and exit overhead</td></tr>
+          <tr><td class="sub">S0i2.2 (deepest)</td><td class="mono">27.3 s &mdash; 88%</td><td>Reaches the deepest substate, not just the shallow one</td></tr>
+          <tr><td class="sub">S0i2.1</td><td class="mono">1.0 s</td><td>Brief transit on the way down</td></tr>
+          <tr><td class="sub">Both PMC dies</td><td class="mono">agree</td><td>pmc0 and pmc1 report matching figures</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Everything came back clean: Wi-Fi reconnected and reachable, all four speaker amps still bound, camera capturing, PSR2 still enabled. The single dmesg warning on resume &mdash; <span class="mono">intel_ipu6.psys: Failed to get runtime PM</span> &mdash; concerns the IPU's processing-system block, which this camera pipeline does not use.</p>
+
+    <h3>Idle power, component by component</h3>
+    <dl class="kv">
+      <dt>PSR2</dt><dd>Panel self-refresh active with selective fetch, observed in <span class="mono">SLEEP</span> state &mdash; the panel stops re-scanning a static screen.</dd>
+      <dt>NVMe APST</dt><dd>Autonomous power state transitions on for both drives; deepest non-operational state draws 5 mW.</dd>
+      <dt>PCI runtime PM</dt><dd>All 28 devices set to <code>auto</code>, which is what allows deep package idle at all &mdash; 97.5% while measuring, on an otherwise idle machine. That last condition matters: see the C-state note below.</dd>
+      <dt>Wi-Fi</dt><dd>Power save is now decided by power source: off on AC, on on battery. Measured against the gateway, leaving it on while plugged in cost 6.91&nbsp;ms worst-case latency against 3.36&nbsp;ms, and more than twice the jitter, for a saving that does not matter there. <code>gb5-power-profile.sh</code> re-asserts it each run, because a reassociation resets the driver setting.</dd>
+      <dt>USB wake</dt><dd>Every <em>built-in</em> wake source is disabled. Hot-plugged devices arrive with wakeup enabled &mdash; the USB Ethernet adapter here is one &mdash; so check <span class="mono">/sys/bus/usb/devices/*/power/wakeup</span> if something wakes the machine unexpectedly.</dd>
+      <dt>Writeback</dt><dd>Raised from 5 s to 15 s. Fewer timer wakeups keeps the SoC in a deep C-state longer.</dd>
+      <dt>Refresh rate</dt><dd>120 Hz on AC, <strong>60 Hz on battery</strong>. The panel is the largest idle consumer here and KDE has no automatic switching, so this was the one real gap. Set <code>GB5_KEEP_120HZ=1</code> in <code>/etc/default/gb5-power</code> to keep 120 Hz everywhere.</dd>
+    </dl>
+
+    <div class="watch">
+      <p><strong>One device is pinned awake on purpose.</strong> The fingerprint reader is held at <code>power/control = on</code>. Autosuspend was tried and backed out: libfprint's own autosuspend database lists this ID only in its known-but-<em>un</em>supported block, meaning upstream never validated it here. The saving would be a few milliwatts against a device you authenticate with all day.</p>
+    </div>
+
+    <h3>The C-state names are lying to you</h3>
+    <p>Only three idle states are exposed, named <span class="mono">C1_ACPI</span>, <span class="mono">C2_ACPI</span>, <span class="mono">C3_ACPI</span>. Read literally, that says the machine is capped at C3. It is not. <code>intel_idle</code> has no native table for Arrow Lake &mdash; mainline covers Meteor Lake-L and even the newer Panther Lake-L, but not this &mdash; so it uses the firmware&rsquo;s ACPI <span class="mono">_CST</span>, which names states by ACPI&rsquo;s generic numbering rather than the hardware&rsquo;s. The MWAIT hint gives the truth:</p>
+    <div class="scroller">
+      <table>
+        <thead><tr><th>Shown as</th><th>MWAIT hint</th><th>Actually is</th><th>Entered</th></tr></thead>
+        <tbody>
+          <tr><td class="sub">C1_ACPI</td><td class="mono">0x00</td><td>C1</td><td>522,210&times;</td></tr>
+          <tr><td class="sub">C2_ACPI</td><td class="mono">0x21</td><td><strong>C6</strong></td><td>893,084&times;</td></tr>
+          <tr><td class="sub">C3_ACPI</td><td class="mono">0x60</td><td><strong>C10</strong></td><td>861,820&times;</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>The cores reach C10 constantly &mdash; 40 minutes of a 55-minute uptime. <strong>Package</strong> C10 is a different thing: it needs every core in C10 <em>and</em> the uncore and GPU idle at once, so anything running at all keeps the package awake. Measured with a Node process, browsers and KDE polling active, the package spent 0.03&nbsp;s of 10&nbsp;s in any C-state.</p>
+
+    <div class="watch">
+      <p><strong>A hardware-specific kernel build would gain nothing here.</strong> The only thing a native <code>intel_idle</code> table adds over this ACPI path is a nominal <span class="mono">C1E</span> state &mdash; and C1E auto-promotion is already enabled in hardware, with <span class="mono">MSR_IA32_POWER_CTL</span> bit 1 set on all 16 logical CPUs, so a C1 request is promoted to C1E by the CPU whatever the OS asks for. The idle path is not where this machine loses power.</p>
+    </div>
+
+    <h3>The core layout, and why 16 threads are 16 cores</h3>
+    <p>Arrow Lake-H dropped hyper-threading. Sixteen logical CPUs are sixteen physical cores, every <span class="mono">thread_siblings_list</span> a single entry. It is very easy to assume six P-cores means CPUs 0&ndash;11 and get every per-core-type measurement wrong &mdash; that mistake was made here before the topology was checked.</p>
+    <div class="scroller">
+      <table>
+        <thead><tr><th>CPUs</th><th>Type</th><th>Max clock</th><th><span class="mono">cpu_capacity</span></th><th>Busy at idle</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">0&ndash;5</td><td>P-core, Lion Cove</td><td>5100 MHz</td><td>1024</td><td><strong>14.5%</strong></td></tr>
+          <tr><td class="mono">6&ndash;13</td><td>E-core, Skymont</td><td>4400 MHz</td><td>774</td><td>3.8%</td></tr>
+          <tr><td class="mono">14&ndash;15</td><td>LP-E, on the SoC tile</td><td>2500 MHz</td><td>312</td><td>1.1%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Light background work lands mostly on the <em>fast</em> cores. That looks like a scheduling bug and mostly is not: Thread Director sends short latency-sensitive wakeups to a P-core at low clock, which finishes sooner and drops back to C10 faster than an LP-E core grinding through the same work would. Race-to-idle beats slow-and-steady at millisecond scale. It is only worth fighting for sustained low-priority load, and there the lever is cgroup placement for that one workload &mdash; not a daemon that repartitions the whole machine.</p>
+
+    <h3>intel-lpmd: patched to run, measured, rejected</h3>
+    <p>Intel&rsquo;s low-power-mode daemon is meant to herd idle work onto the LP-E cores. It refuses to start here &mdash; <span class="mono">Unsupported CPU model</span> &mdash; because its table knows Arrow Lake as <span class="mono">0xb5</span> and this chip is <strong>family 6, model 0xc5</strong>, Arrow Lake-H: a different model number for the same architecture. One line makes it run, and it then reads the topology correctly (<span class="mono">6 Pcores, 8 Ecores, 2 Lcores, TDP 28W</span>). The patch is in the repo. The daemon is not installed, for two reasons.</p>
+    <p><strong>It saves nothing.</strong> Back-to-back in the same minute, package RAPL: 7.94 W with it running, 7.87 W stopped, ~8.0 W after a full revert. One number, three times.</p>
+
+    <div class="watch">
+      <p><strong>The near-miss worth repeating.</strong> An earlier comparison seemed to show 3.73 W baseline against 7.17 W with lpmd &mdash; the daemon doubling power consumption. That was not a result. The baseline had been captured half an hour earlier on a quieter machine. Two RAPL readings taken far apart on a desktop with browsers and a dev server running measure the browsers, not the change. Both arms have to run in the same minute or the number is fiction &mdash; and the fiction is convincing, because it points somewhere plausible.</p>
+    </div>
+
+    <p><strong>And it leaves the machine restricted after it exits.</strong> lpmd entered <span class="mono">DEFAULT_HFI</span> at startup and pinned everything to CPUs 0&ndash;13 &mdash; <em>excluding</em> 14 and 15, the two LP-E cores it had just identified as the low-power ones. Killing the daemon does not undo it.</p>
+    <div class="watch">
+      <p><strong>The obvious fix does not stick, and that is worth knowing.</strong> Writing the cgroup file directly appears to work and then silently reverts &mdash; here, about an hour later. lpmd does not write <span class="mono">cpuset.cpus</span>; it sets a <em>systemd property</em> over D-Bus, leaving a runtime drop-in at <span class="mono">/run/systemd/system.control/system.slice.d/50-AllowedCPUs.conf</span>. systemd re-applies that on the next <code>daemon-reload</code>, which can be triggered by installing any unrelated service.</p>
+    </div>
+    <p>Clear the property, not the file:</p>
+    <pre><code>for c in system.slice user.slice machine.slice; do
+    systemctl set-property --runtime "$c" AllowedCPUs=
+done
+systemctl daemon-reload
+bash -c 'taskset -pc $$'   <span class="cmt"># expect 0-15</span></code></pre>
+    <p>When it is genuinely unset, systemd drops the cpuset controller from those slices, so <span class="mono">cpuset.cpus.effective</span> stops existing. That absence is the success condition.</p>
+    <p>The service is <code>masked</code> rather than disabled, so nothing can pull it in as a dependency.</p>
+
+    <h3>Where the watts actually go</h3>
+    <p>Every short power measurement in this project failed the same way: on a live desktop the noise floor is several watts, so a twenty-second sample says more about what the desktop happened to be doing than about the change under test. The fix was to log continuously and select quiet windows afterwards. 139 undisturbed thirty-second samples on battery, filtered to the 113 where both P-cores and E-cores were under 2% busy:</p>
+    <div class="scroller">
+      <table>
+        <thead><tr><th>Measure</th><th>Idle on battery</th></tr></thead>
+        <tbody>
+          <tr><td>Whole system, quiet moments</td><td><strong>4.86 W</strong> &mdash; a genuine idle floor, but <em>not</em> a runtime</td></tr>
+          <tr><td>Whole system, actual sustained drain</td><td><strong>6.19 W</strong> &mdash; <strong>11.9 h &plusmn; 0.4</strong>, by coulomb count over 33 gauge steps</td></tr>
+          <tr><td>SoC package</td><td>3.33 W</td></tr>
+          <tr><td>CPU cores</td><td>0.23 W</td></tr>
+          <tr><td>GPU RC6</td><td>95.2%</td></tr>
+          <tr><td>Package C-states</td><td>C6 23.5% &middot; C8 0.54% &middot; C10 1.06%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Spread: min 3.86, p25 4.54, median 4.86, p75 5.17, max 6.44&nbsp;W, holding steady as the pack drains.</p>
+
+    <div class="watch">
+      <p><strong>That idle figure is not a runtime, and treating it as one was a mistake worth describing.</strong> The battery&rsquo;s coulomb counter is ground truth &mdash; <span class="mono">capacity</span> here is exactly <span class="mono">charge_now / charge_full</span>, so a percentage drop converts to energy linearly. Over 1.69&nbsp;h of undisturbed operation it recorded <strong>6.30&nbsp;W</strong>, against 5.02&nbsp;W for the median of instantaneous readings and 5.23&nbsp;W for their mean. The snapshots under-report by 17&ndash;20%.</p>
+      <p>The reason is sampling. <span class="mono">current_now &times; voltage_now</span> is an instantaneous value, and at a 30&nbsp;s interval it misses short bursts completely &mdash; the ten largest samples in that window ran up to 21.2&nbsp;W. Averaging snapshots of a bursty load systematically under-counts energy. If you want a runtime, integrate the charge counter; if you want an idle floor, the snapshots are fine.</p>
+    </div>
+
+    <div class="watch">
+      <p><strong>RAPL is not the system.</strong> <span class="mono">intel-rapl</span> measures the SoC package and nothing else &mdash; not the panel, not Wi-Fi, not the SSD, not the board. At idle here the package is 3.34&nbsp;W of a 4.82&nbsp;W machine, so tuning by RAPL alone optimises two thirds of the problem and misses the part that actually varies. Whole-machine draw comes from the battery, which means <em>the numbers that decide battery life are only available while discharging</em>.</p>
+    </div>
+
+    <h3>The screen decides everything, and not through the brightness slider</h3>
+    <p>Full-screen black against full-screen white, 45&nbsp;s samples, order alternated, taking the quietest quartile of each:</p>
+    <div class="scroller">
+      <table>
+        <thead><tr><th>Screen</th><th>Whole-system draw</th></tr></thead>
+        <tbody>
+          <tr><td>Black</td><td>~5&nbsp;W</td></tr>
+          <tr><td>White</td><td><strong>~15&nbsp;W</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Content costs about <strong>10&nbsp;W</strong> &mdash; three times the draw, and more than the entire SoC package. <strong>The gap between a dark screen and a bright one is larger than the gap between idling and compiling.</strong> On an emissive panel this is expected: power follows light actually emitted, which is why a dark colour scheme is a real saving here and pure folklore on the LCD in a MacBook Air.</p>
+
+    <div class="watch">
+      <p><strong>The brightness numbers from this machine are all void, and the reason is the interesting part.</strong> A run gave white at 100% costing 13.6&nbsp;W, at 30% costing 7.0&nbsp;W, and at 10% costing 13.0&nbsp;W. Ten percent cannot cost more than thirty, so the method was wrong. The cause: this laptop has an ambient light sensor and KDE auto-brightness is on (<span class="mono">automaticBrightness: true</span>, PowerDevil driving the panel through <code>iio-sensor-proxy</code>). Every <span class="mono">intel_backlight</span> write was overridden within seconds &mdash; the tell was the panel finishing on 1126, a value nothing in the test had written. It is also a feedback loop: a white test screen lights the room, the sensor reads brighter, auto-brightness raises the panel.</p>
+    </div>
+
+    <h3>A USB Ethernet adapter was holding the whole platform awake</h3>
+    <p><span class="mono">/sys/kernel/debug/pmc_core/ltr_show</span> reports the latency tolerance each IP block advertises, and the tightest one sets the floor for how deeply the package may sleep. Every block read zero except the USB controller, which was demanding <strong>128&nbsp;&micro;s</strong> &mdash; and package C8 and C10 read exactly zero.</p>
+    <p>The cause was a TP-Link UE300 gigabit Ethernet adapter sitting at <span class="mono">power/control = on</span>. Unplugged, the USB controller&rsquo;s tolerance relaxed and C8/C10 began accumulating for the first time. The tightest constraint is now <span class="mono">ISH</span> at 10.5&nbsp;ms &mdash; three orders of magnitude looser.</p>
+    <p>Worth knowing generally: one stubborn device can forfeit the platform&rsquo;s deep idle states, and nothing in the usual tooling points at it. <code>ltr_show</code> names the culprit directly.</p>
+
+    <div class="watch">
+      <p><strong>Half of an earlier alarm here was architectural.</strong> <span class="mono">Pkg%pc7</span> and <span class="mono">Pkg%pc9</span> <em>cannot</em> be reported on this family &mdash; turbostat maps Arrow Lake to <span class="mono">adl_features</span>, whose supported set omits them, with an upstream comment saying so. Only pc2, pc3, pc6, pc8 and pc10 exist. So &ldquo;C7 through C10 read zero&rdquo; was two real zeros and two columns that were never going to print.</p>
+    </div>
+
+    <h3>The battery gauge has 49&nbsp;mAh of resolution, and it will fool you</h3>
+    <p><span class="mono">charge_now</span> does not update continuously. It holds a value and jumps, in steps of exactly <strong>49&nbsp;mAh</strong>, roughly every <strong>445&nbsp;seconds</strong>. Sampled every 5&nbsp;s it reads perfectly flat for a minute while about 6&nbsp;mAh is actually drawn.</p>
+    <p>A <span class="mono">quiet</span>-versus-<span class="mono">balanced</span> comparison was run here as four alternating 12-minute arms and produced 98, 98, 98 and 49&nbsp;mAh. Read as step counts those are <strong>2, 2, 2, 1</strong> &mdash; there is no sub-step information in them at all. The apparent halving in the last arm is one step that had not landed yet.</p>
+    <div class="watch">
+      <p><strong>So the result is &ldquo;not measurable&rdquo;, which is not the same claim as &ldquo;no difference&rdquo;.</strong> The experiment could not have detected a difference had one existed. Count the gauge&rsquo;s steps before believing any battery A/B: under about eight per arm you are measuring the gauge, not the machine.</p>
+    </div>
+    <p>The runtime figure is unaffected, because it spans far more steps. Extended to 3.93&nbsp;h and <strong>33 steps</strong> it converges to <strong>6.19&nbsp;W, 11.9&nbsp;h &plusmn; 0.4</strong> &mdash; quantisation down to &plusmn;3.0%. It settled as data accumulated, with overlapping error bars throughout: 12.1&nbsp;&plusmn;&nbsp;0.9, 12.1&nbsp;&plusmn;&nbsp;0.6, 11.7&nbsp;&plusmn;&nbsp;0.4, 11.9&nbsp;&plusmn;&nbsp;0.4.</p>
+
+    <h3>What is actually waking the machine &mdash; including the thing measuring it</h3>
+    <p>Idle <em>depth</em> is fine: C10 residency 91.6%, package 3.48&nbsp;W. The wakeup <em>rate</em> is not &mdash; 2208 interrupts per second at 3% busy, 86% of them local timer interrupts, and over half of all C10 entries waking before their residency target is repaid.</p>
+    <p><code>powertop</code>&rsquo;s software section came back entirely empty, so attribution came from per-process voluntary context switches instead:</p>
+    <div class="scroller">
+      <table>
+        <thead><tr><th>wakeups/s</th><th>process</th></tr></thead>
+        <tbody>
+          <tr><td><strong>96.8</strong></td><td><strong>the agent taking the measurement</strong></td></tr>
+          <tr><td>75.0</td><td class="mono">rcu_preempt</td></tr>
+          <tr><td>63.3</td><td class="mono">kwin_wayland</td></tr>
+          <tr><td>50.6</td><td class="mono">irq/193-iwlwifi</td></tr>
+          <tr><td>26.8</td><td class="mono">plasma-systemmonitor</td></tr>
+          <tr><td>14.0</td><td class="mono">ksystemstats</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="watch">
+      <p><strong>The largest single wakeup source during the idle measurements was the process doing the measuring.</strong> That does not invalidate the figures, it locates them: they describe a machine with something light running on it, which is a fair model of real use. But the true floor, with a logged-in desktop and genuinely nothing happening, is lower than anything recorded here.</p>
+    </div>
+    <p>The one actionable item: <span class="mono">plasma-systemmonitor</span> and <span class="mono">ksystemstats</span> spend about 41 wakeups per second keeping monitor widgets updated. Pure overhead when nobody is looking at them.</p>
+    <p>Worth ruling out explicitly, because 1908 timer interrupts per second invites the conclusion that dynticks is broken: it is not. The kernel has <span class="mono">CONFIG_NO_HZ_FULL=y</span> with no <span class="mono">nohz_full=</span> on the command line, which behaves as dynticks-idle, and <span class="mono">CONFIG_HZ</span> is 1000. A genuinely periodic tick across 16 CPUs would be 16000/s.</p>
+
+    <h3>Hibernation has 1.4&nbsp;GiB of headroom</h3>
+    <p>When the battery runs out this machine hibernates cleanly rather than losing power mid-write &mdash; <span class="mono">CanHibernate</span> yes, <span class="mono">resume=</span> set, and UPower&rsquo;s <span class="mono">CriticalPowerAction=Auto</span> resolving to HybridSleep at 2%.</p>
+    <p>But hibernation must fit used RAM into <em>disk</em> swap, and zram does not count. There is <strong>8.80&nbsp;GiB</strong> of disk swap against <strong>30&nbsp;GiB</strong> of RAM. At a light desktop 7.44&nbsp;GiB was in use, leaving 1.36&nbsp;GiB. A large build, a VM or a heavy browser session crosses that, hibernation fails, and <span class="mono">AllowRiskyCriticalPowerAction=false</span> means UPower declines to try anything else &mdash; so it becomes a hard power-off with whatever was unsaved.</p>
+
+    <h3>The 60 Hz saving that never happened</h3>
+    <p>The tuning script had been switching the panel to <span class="mono">2880x1800@60</span> on battery since it was written, and logging success every time. <strong>This panel has no 60&nbsp;Hz mode at native resolution.</strong> <code>kscreen-doctor</code> lists exactly one 2880&times;1800 mode and it is 120&nbsp;Hz; every 60&nbsp;Hz mode it offers is at a lower resolution.</p>
+    <p>The reason it looked fine: <strong><code>kscreen-doctor</code> exits 0 even when it prints &ldquo;Output mode not found&rdquo;</strong>, so an <span class="mono">&amp;&amp;</span> guard logged a success that never occurred. Verify what applied by reading the state back, never by checking the exit code.</p>
+
+    <h3>Hibernation was enabled and could not complete</h3>
+    <p>Out of the box the kernel sizes the hibernation image up to <span class="mono">image_size</span> (about 2/5 of RAM) and the stock swap partition is 8.8&nbsp;GiB. On a 31&nbsp;GiB machine that is never enough under load &mdash; with an Android build running, RAM in use was 17.7&nbsp;GiB.</p>
+    <p><strong>An aborted hibernate is not harmless.</strong> One on 2026-08-22 reset the USB bus and wedged the Samsung SCAI/EC interface, silently killing fingerprint authentication, the keyboard backlight and <span class="mono">power_on_lid_open</span> for nine hours before anyone noticed. Each failed in a way that looks like something else: the fingerprint just asks for a password instead, and the backlight&rsquo;s sysfs node accepts writes it cannot honour.</p>
+    <div class="watch">
+      <p><strong>Capping <span class="mono">image_size</span> is not a fix.</strong> It was tried first, at 7&nbsp;GiB. With 17.7&nbsp;GiB in use the machine was still short by nearly nine gigabytes; the cap only meant the kernel gave up earlier. <span class="mono">image_size</span> is a best-effort <em>upper limit</em> &mdash; the kernel frees memory to shrink the image toward it &mdash; so it helps only when the shortfall is small.</p>
+    </div>
+    <p>The fix is a 20&nbsp;GiB swapfile on its own btrfs subvolume:</p>
+    <pre><code>mount -o subvolid=5 /dev/nvme0n1p2 /mnt/btrfs-top
+btrfs subvolume create /mnt/btrfs-top/@swap      <span class="cmt"># sibling of @, so Timeshift never snapshots it</span>
+mount -o subvol=@swap,noatime /dev/nvme0n1p2 /swap
+btrfs filesystem mkswapfile --size 20g /swap/swapfile
+swapon /swap/swapfile
+btrfs inspect-internal map-swapfile -r /swap/swapfile   <span class="cmt"># -&gt; resume_offset</span></code></pre>
+    <p>A successful <code>swapon</code> is itself the proof it is right: btrfs refuses to swap on anything compressed, copy-on-write, or spanning multiple devices, and the root here is mounted <span class="mono">compress=zstd:1</span>.</p>
+
+    <div class="watch">
+      <p><strong><span class="mono">/sys/power/resume</span> and <span class="mono">resume_offset</span> are writable at runtime.</strong> The whole fix can be applied and tested with zero boot risk &mdash; set the offset <em>first</em>, then the device. Only making it survive a reboot needs the kernel command line, and therefore a UKI regeneration under Secure Boot. That distinction is worth knowing before talking yourself out of the fix, as happened here for most of a day.</p>
+    </div>
+
+    <h3>Verifying a UKI change, and the trap in it</h3>
+    <p>A UKI&rsquo;s <span class="mono">.cmdline</span> section is <strong>UTF-16</strong>. Grepping the raw bytes reports every key as missing even when the file is perfectly correct &mdash; which nearly caused a good change to be reverted here. Strip the nulls first:</p>
+    <pre><code>objcopy -O binary --only-section=.cmdline \
+        /boot/efi/EFI/Linux/manjaro-7.1-x86_64.efi /tmp/c.txt
+tr -d '\0' &lt; /tmp/c.txt</code></pre>
+    <p>Keep the previous UKI beside the new one, signed, as a fallback: it appears as its own systemd-boot entry and still carries the old command line. On this machine the reboot also swapped the NVMe enumeration order &mdash; the Linux disk became <span class="mono">nvme1n1</span> &mdash; and nothing broke only because every reference is by UUID. A <span class="mono">/dev/</span>-based <span class="mono">resume=</span> would not have booted.</p>
+
+    <h3>What a successful hibernate still breaks</h3>
+    <p>Verified with a real S4 cycle: same <span class="mono">boot_id</span>, uptime continued 527&nbsp;s to 781&nbsp;s. Two things still need repairing on resume, and they are handled by a <span class="mono">systemd-sleep</span> hook rather than left to be rediscovered.</p>
+    <div class="scroller">
+      <table>
+        <thead><tr><th>After resume</th><th>State</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">kbd_backlight</td><td><strong>broken</strong> &mdash; every CSFI call answers <span class="mono">0xff</span></td></tr>
+          <tr><td class="mono">power_on_lid_open</td><td><strong>broken</strong> &mdash; reads empty, and each read costs a CSFI failure</td></tr>
+          <tr><td class="mono">usb_charging</td><td>works</td></tr>
+          <tr><td class="mono">platform_profile</td><td>works</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Only <em>partly</em> wedged, which is what makes it easy to miss &mdash; the profile still switches, so power management looks healthy while the keyboard backlight is dead. Reloading <code>samsung_galaxybook</code> re-runs its ACPI init and clears it.</p>
+    <p>S4 also resets the fingerprint reader six times, destroying its SDCP session while the kernel <span class="mono">boot_id</span> is unchanged and the cached claim still looks current. The driver is patched to treat the resulting <span class="mono">AuthorizedIdentity</span> MAC failure as a reconnect trigger, keeping the host keypair so the enrolments stay valid:</p>
+    <pre><code>touch #1   Enrollment ID identified by the device
+           SDCP AuthorizedIdentity verification failed
+           "Invalidated the cached SDCP session..."     <span class="cmt">&lt;- the patch</span>
+next claim SDCP ConnectResponse verified successfully
+touch #2   verify-match</code></pre>
+    <p><strong>The first touch after every hibernate still fails.</strong> The driver only learns the session is stale by failing, so it cannot repair mid-operation. Expect one rejected touch after a resume, then normal behaviour.</p>
+    <p>One more thing S4 exposed: the machine resumed straight into an <em>unlocked</em> desktop. Locking on the way down beats locking on the way up, because a pre-sleep lock cannot lose the race.</p>
+
+    <h3>Two things worth doing yourself</h3>
+    <ul class="tight">
+      <li><strong>Unplug the USB stick.</strong> A 29 GB drive is still attached and unmounted. It is the only device left refusing autosuspend, and it keeps a USB controller from fully idling.</li>
+      <li><strong>Measure real drain unplugged.</strong> The battery sits at its 80% charge limit with the charger connected, so it reports no current at all. Meaningful idle-drain figures need <code>powertop</code> run on battery for a few minutes.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2><span class="rule"></span>The rest of the machine</h2>
+    <p class="lede">A second pass over everything the enablement work never touched. Each line below was checked against live output, not assumed &mdash; and two of the answers are &ldquo;this hardware does not exist&rdquo;, which is worth knowing before someone spends an evening trying to configure it.</p>
+
+    <h3>Working</h3>
+    <dl class="kv">
+      <dt>Fn keys</dt><dd>All functional. Proven by injecting keycodes through a temporary virtual keyboard and watching the sysfs values move: brightness, volume, mute, mic-mute, touchpad toggle, keyboard backlight. No unmapped scancodes appear in any journal. The keyboard-backlight key is handled entirely inside the Samsung driver and emits no keycode, so KDE shows no on-screen indicator for it &mdash; expected, not a fault.</dd>
+      <dt>Touchscreen</dt><dd>Caught two real finger taps mid-audit. Reports 343&times;214 mm against the panel's 344&times;215 mm and uses an identity calibration, so it is correctly mapped to the internal display under Wayland.</dd>
+      <dt>Microphone</dt><dd>The SOF topology's beamformer is <em>already</em> active &mdash; time-domain fixed beamforming steered straight ahead, plus dynamic range compression and EQ. Re-verified: a live capture at &minus;33 dBFS RMS, &minus;18.6 dBFS peak. Nothing to tune, and it is now part of the automated checks.</dd>
+      <dt>Bluetooth</dt><dd>Every codec present and backed by a real library: AAC, aptX / HD / LL, LDAC, LC3 for LE Audio, mSBC, SBC-XQ. Only aptX Adaptive is absent, and it has no Linux implementation at all. <code>bluez-utils</code> was missing and is now installed.</dd>
+      <dt>Thunderbolt</dt><dd>USB4 with <span class="mono">iommu+user</span> security and DMA protection on, authorisation prompts wired into the desktop. This is the right posture &mdash; do not loosen it. Untestable without a dock.</dd>
+      <dt>Light sensor</dt><dd>Present and feeding automatic brightness.</dd>
+    </dl>
+
+    <h3>Custom touchpad gestures: not possible natively</h3>
+    <p>The pad handles five simultaneous contacts, so the hardware is not the limit. Plasma is. Probing KWin's scripting API directly rather than guessing:</p>
+    <pre><code>registerTouchpadSwipeShortcut = MISSING
+registerTouchpadPinchShortcut = MISSING
+registerScreenEdge            = global
+registerShortcut              = global</code></pre>
+    <p>The C++ API exists in KWin but is not exposed to scripts, so on Plasma 6.7 there is no supported way to bind your own touchpad gestures. What you get is the built-in set &mdash; three and four finger swipes for Overview, the grid and desktop switching &mdash; plus two and three finger tap buttons, which are enabled.</p>
+    <p>Going further means an external daemon reading libinput events and injecting keystrokes (<code>fusuma</code> plus <code>ydotool</code>). That is a background process, membership of the <code>input</code> group and a uinput device: real complexity and a privilege change in exchange for convenience. Deliberately not done.</p>
+
+    <h3>Absent in hardware &mdash; not a misconfiguration</h3>
+    <div class="cards">
+      <div class="card">
+        <h4>No accelerometer</h4>
+        <p>Clamshell chassis, so there is nothing to rotate against. KWin reports auto-rotate as <span class="mono">incapable</span>. Nothing to enable.</p>
+      </div>
+      <div class="card">
+        <h4>No stylus support</h4>
+        <p>The digitizer's HID report descriptor carries only touch and vendor usages, with no Pen usage anywhere. A pen will not work on this panel.</p>
+      </div>
+    </div>
+
+    <h3>Log noise you can safely ignore</h3>
+    <ul class="tight">
+      <li><span class="mono">SAM0430:00: failed to execute CSFI</span> &mdash; a firmware attribute this BIOS does not implement. The camera cover and mic mute use a different path, and both work.</li>
+      <li>Thermal-sensor errors &mdash; firmware bugs. The embedded controller still runs the fans; only the reporting path is broken. The fan-status error was on this list too, until it turned out to be firing twice a second and burying everything else in the ring buffer; see the freeze chapter.</li>
+      <li><span class="mono">intel_ipu6.psys: Failed to get runtime PM</span> on resume &mdash; a block of the imaging unit this camera pipeline does not use.</li>
+      <li><span class="mono">Touch jump detected and discarded</span> &mdash; libinput is already throwing away the bad samples.</li>
+      <li>The <code>xe</code> driver loads but binds nothing; <code>i915</code> owns the GPU. Harmless.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2><span class="rule"></span>Wi-Fi: 6 GHz is blocked by firmware, not by Linux</h2>
+    <p class="lede">The card is an Intel Wi-Fi 7 BE201 with 59 channels in the 6 GHz band. When this was first investigated all 59 reported <span class="mono">(disabled)</span>; 35 still do, and the remaining 24 are <span class="mono">(no IR)</span> &mdash; present but passive-only, which is the normal regime for a 6 GHz <em>client</em> rather than a fault. Either way the obvious fix is not the fix.</p>
+
+    <p>The regulatory domain was unset, so the kernel used country <span class="mono">00</span> &mdash; the world fallback, which has no 6 GHz allocation at all. Setting it to the local domain is correct and worth doing: the global table gains <span class="mono">5925&ndash;6425 MHz @ 320 MHz</span>. It also does not enable 6 GHz here, because this PHY is <strong>self-managed</strong>: the firmware owns its regulatory domain and <code>iw reg set</code> cannot override it.</p>
+
+    <p>What actually decides is an ACPI method. iwlwifi queries <span class="mono">_DSM</span> UUID <span class="mono">f21202bf-8f78-4dc6-a5b3-1f738e285ade</span>, function 3 &mdash; <em>enable 6E</em>. Decompiling this machine's DSDT shows where that lands:</p>
+    <pre><code>If ((Arg2 == 0x03))
+{
+    Local0 = UHBS   <span class="cmt">/* \UHBS */</span>
+    Return (Local0)
+}</code></pre>
+    <p><code>UHBS</code> is a 32-bit field in the ACPI NVS region, written by the BIOS at boot. There is no Linux-side override: <code>lar_disable</code> was removed in kernel 5.4, and neither <code>iwlwifi</code> nor <code>iwlmld</code> exposes a parameter for it. The only route from Linux is a DSDT override loaded through the initramfs, which on this machine also means rebuilding and re-signing the UKI.</p>
+
+    <div class="watch">
+      <p><strong>Check the access point before blaming the laptop.</strong> When this was investigated, the local AP was visible only on 2.4 GHz at &minus;34 dBm &mdash; no 5 GHz sibling, no 6 GHz, and no <em>Reduced Neighbor Report</em> in its beacon. RNR is how a 6 GHz BSS is discovered, because a client whose 6 GHz channels are disabled cannot scan for them directly. A working card would have had nothing to join.</p>
+    </div>
+
+    <div class="watch">
+      <p><strong>6 GHz channels start at 5955 MHz, not 6000.</strong> A pattern matching <span class="mono">6[0-9][0-9][0-9] MHz</span> silently skips the first several and reports zero channels where 59 exist. That mistake was made here and produced a wrong conclusion before the count was redone properly.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="rule"></span>Snapshots, on a system with three DKMS modules</h2>
+    <p class="lede">A kernel update that outruns DKMS takes out the camera, the speakers and the fingerprint reader at once. This is the part that makes the rest recoverable.</p>
+
+    <p>Pre-upgrade snapshots were already working &mdash; a pacman <span class="mono">PreTransaction</span> hook has been creating them all along. Three things were missing or misleading:</p>
+    <ul class="tight">
+      <li><strong>No time axis.</strong> Only package upgrades created restore points, so nothing covered a config change, a manual edit or a DKMS rebuild. Boot and daily snapshots are now enabled.</li>
+      <li><strong>The schedules could never have fired.</strong> Timeshift writes its cron entries only when <code>timeshift --check</code> runs with schedules on &mdash; editing the config alone does nothing. Running it created both entries.</li>
+      <li><strong><span class="mono">btrfs_mode</span> pinned true.</strong> The shipped config says false while the CLI autodetects BTRFS, so the two disagree; opening the GUI would write the default back and start rsync copies of a 468 GB root.</li>
+    </ul>
+
+    <div class="watch">
+      <p><strong>The config file is not authoritative &mdash; <code>timeshift --list</code> is.</strong> A default <span class="mono">/etc/timeshift/timeshift.json</span> reading <span class="mono">"btrfs_mode": "false"</span> looks like proof that snapshots are doing rsync backups. It is not; that file had never been written to. Reading it and concluding the worst wasted real time here.</p>
+    </div>
+
+    <p><code>grub-btrfs</code> was removed along with <code>os-prober</code>: it generated snapshot entries for a GRUB menu this machine no longer boots. The consequence is worth stating &mdash; <strong>there is no boot-menu rollback any more</strong>. Restoring happens from Timeshift itself, which works fine, but recovering a system that will not boot at all now needs live media rather than a menu entry.</p>
+  </section>
+
+  <section>
+    <h2><span class="rule"></span>Three traps that look like other bugs</h2>
+    <p class="lede">All three cost hours because they present as something else entirely.</p>
+
+    <h3>The two NVMe drives do not enumerate in a stable order</h3>
+    <p><span class="mono">nvme0n1</span> was the Windows disk on one boot and the Linux disk on the next; the Linux ESP moved from <span class="mono">nvme1n1p1</span> to <span class="mono">nvme0n1p1</span> across a single reboot. Anything that hardcodes <span class="mono">/dev/nvmeXn1pY</span> is a coin flip &mdash; two scripts here had exactly that bug. Use PARTUUID, or look the device up at runtime with <code>findmnt</code>.</p>
+
+    <h3>Windows fast startup makes its own disk unwritable, and says nothing</h3>
+    <p>Windows fast startup is a partial hibernate, not a shutdown. It leaves a hibernation image on the NTFS volume, and a filesystem in that state cannot be safely written from Linux &mdash; mount it read-write anyway and you corrupt it. What you see instead is a volume that mounts read-only, or a copy that silently fails, which reads as a permissions problem rather than &ldquo;Windows never actually shut down&rdquo;.</p>
+    <p>Ask before writing, rather than finding out afterwards:</p>
+    <pre><code>ntfs-3g.probe --readwrite /dev/&lt;the windows partition&gt;
+  0   safe
+  14  hibernated &mdash; fast startup, or a real hibernate
+  15  dirty &mdash; needs chkdsk from Windows</code></pre>
+    <p>Only rc&nbsp;0 is safe to write to. The durable fix is to turn fast startup off in Windows; until then, treat the volume as read-only from Linux. Note this machine has no <span class="mono">ntfs3</span> in the kernel &mdash; writing goes through <span class="mono">ntfs-3g</span> over FUSE, so a <code>mount -t ntfs3</code> fails with a misleading <span class="mono">Can&rsquo;t open blockdev</span>.</p>
+
+    <h3>Windows leaves the hardware clock on local time</h3>
+    <p>Linux reads that clock as UTC, so every Windows&nbsp;&rarr;&nbsp;Linux boot starts wrong by the UTC offset until NTP corrects it. That is not cosmetic: the first seconds of the journal are stamped in the future, and <code>journalctl --since</code> keeps matching them forever afterwards &mdash; which silently corrupts any log window scoped by time, and produced a false test result here. Use <span class="mono">--after-cursor</span> when it matters, and set <span class="mono">RealTimeIsUniversal=1</span> on the Windows side &mdash; <span class="mono">config/windows/windows-use-utc-clock.reg</span> in this record does it, so the fix ships as a part rather than a description.</p>
+
+    <div class="watch">
+      <p><strong>Restarting the camera relay drops its node from PipeWire</strong>, so applications lose the bridge device until it is re-probed. Restart <em>wireplumber</em> alone to do that &mdash; restarting <code>pipewire</code> drops every client&rsquo;s audio connection and will cost a running browser its microphone, which reads as &ldquo;the mic broke&rdquo; rather than &ldquo;something restarted&rdquo;.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="rule"></span>Maintenance</h2>
+    <p class="lede">These parts of the system are no longer stock. This is the part worth re-reading after a kernel bump &mdash; though since November the weekly updater and the boot guard do the re-checking themselves.</p>
+
+    <div class="cards">
+      <div class="card">
+        <h4>Three DKMS modules</h4>
+        <p><code>ov02e10-26mhz</code>, <code>max98390-hda</code> and <code>v4l2loopback</code> all rebuild automatically. If a kernel update outpaces them, the camera or speakers go quiet.</p>
+      </div>
+      <div class="card">
+        <h4>libfprint is replaced</h4>
+        <p><code>libfprint-egismoc-sdcp-git</code> conflicts with and provides <code>libfprint</code>, so <code>pacman -Syu</code> leaves it alone. Do not let anything pull stock libfprint back.</p>
+      </div>
+      <div class="card">
+        <h4>The boot chain guards itself</h4>
+        <p><code>gb5-boot-guard.sh</code> runs after every update and keeps the last-resort loader, the fallback image and the signing database right. Manjaro&rsquo;s GRUB hook is disabled on purpose. (This card used to warn that hibernation was undersized; that was fixed with a 20&nbsp;GiB swapfile on 23 August.)</p>
+      </div>
+    </div>
+
+    <h3>One command that checks all of it</h3>
+    <p><code>/usr/local/sbin/gb5-verify.sh</code> runs 135 checks across every area on this page and prints PASS / FAIL / NOTE with the evidence inline. A companion service runs it once, 45 seconds into the next graphical session, writes <code>/var/log/gb5-verify.log</code>, then disables itself &mdash; so there is a cold-boot record without it becoming a permanent background job.</p>
+    <pre><code>sudo gb5-verify.sh              <span class="cmt"># to stdout</span>
+sudo gb5-verify.sh /tmp/r.log   <span class="cmt"># and to a file</span>
+
+<span class="cmt"># after every update, before rebooting — the signing hook can fail silently</span>
+sbctl verify
+sudo gb5-boot-guard.sh --check   <span class="cmt"># silent means the boot chain is right</span></code></pre>
+    <p>Two of the checks depend on the hardware being free: if a camera application is open, the camera and microphone probes report contention rather than a fault. Several encode a trap that cost real time to find &mdash; that the relay pipeline carries no CPU filter, that GPU denoise is actually engaged rather than silently idling on an RGB surface, that no emergency frame drops appear in the journal, and that the sensor is still retimed for the 26&nbsp;MHz clock.</p>
+
+    <div class="watch">
+      <p><strong>Do not hardcode <code>/dev/videoN</code> anywhere.</strong> The v4l2loopback bridge takes whatever number is free at probe time &mdash; it was <span class="mono">video48</span> one boot and <span class="mono">video0</span> the next. Look it up by card name instead.</p>
+    </div>
+
+    <h3>Or check by hand after a kernel update</h3>
+    <pre><code>dkms status                          <span class="cmt"># all three built for the new kernel?</span>
+dmesg | grep -i ov02e10              <span class="cmt"># no "external clock" error</span>
+cam -l                               <span class="cmt"># camera enumerates</span>
+lsmod | grep max98390                <span class="cmt"># amps loaded</span>
+fprintd-verify -f right-index-finger <span class="cmt"># NOT bare: it tests only the FIRST finger</span>
+vainfo | grep -c VAProfile           <span class="cmt"># expect 42</span>
+
+<span class="cmt"># sleep quality — only meaningful after an actual suspend</span>
+cat /sys/kernel/debug/pmc_core/slp_s0_residency_usec
+cat /sys/kernel/debug/pmc_core/substate_residencies</code></pre>
+
+    <h3>If something needs undoing</h3>
+    <dl class="kv">
+      <dt>Camera</dt><dd><code>dkms remove -m ov02e10-26mhz -v 1.0 --all</code> restores the in-tree driver (and the dead camera).</dd>
+      <dt>Speakers</dt><dd><code>dkms remove -m max98390-hda -v 1.0 --all</code>, then <code>systemctl disable --now max98390-hda-i2c-setup</code>. The speakers go silent again.</dd>
+      <dt>Fingerprint</dt><dd><code>pacman -S libfprint</code> reverts to stock; the reader stops working. PAM stays safe either way &mdash; the <code>-</code> prefix skips a missing module.</dd>
+      <dt>Power tuning</dt><dd>Delete <code>/etc/udev/rules.d/99-gb5-power.rules</code> and disable <code>gb5-power-tune.service</code>.</dd>
+      <dt>Kernel tuning</dt><dd>Delete <code>/etc/sysctl.d/99-gb5-tuning.conf</code> and <code>/etc/systemd/zram-generator.conf</code>.</dd>
+      <dt>PAM</dt><dd>Timestamped <code>.bak-2026-08-19</code> copies sit beside every edited file in <code>/etc/pam.d/</code>.</dd>
+    </dl>
+    <p>The working build tree is kept at <code>~/.cache/gb5-build</code> (47 MB) so the fingerprint package can be rebuilt without re-deriving the two PKGBUILD patches.</p>
+  </section>
+
+  <section>
+    <h2><span class="rule"></span>Doing this on another machine</h2>
+    <p class="lede">Everything above is a description. A description is not a way to do it again &mdash; so the record now carries the parts, not just the account of them.</p>
+
+    <pre><code>sudo ./setup.sh          <span class="cmt"># guided, asks before each step</span>
+sudo ./setup.sh --list   <span class="cmt"># what the steps are</span></code></pre>
+
+    <p>Five steps &mdash; camera, speakers, fingerprint, system tuning, Secure Boot &mdash; each idempotent, so re-running one is the normal way to repair something after a kernel update rather than an exceptional act. A precheck runs first and refuses to continue on a hard mismatch.</p>
+    <p><strong>None of it has been run on a clean install.</strong> It is derived from a machine where all of it already works, and each step detects what is present and skips it &mdash; which makes re-running safe, but means the from-scratch path has been reasoned about rather than executed end to end.</p>
+
+    <p>The two patched kernel module sources are <strong>bundled rather than re-patched</strong>. The camera's Bayer order was found empirically, by testing all four orders and matching channel means against a known-good capture; its frame timing is derived from this board's clock. Asking someone to re-derive either from prose would be far worse than shipping the file.</p>
+
+    <div class="watch">
+      <p><strong>These fixes are per-board, not per-platform.</strong> The clock, the Bayer order and the amplifier addresses were all determined on a 965XHD. On a different Galaxy Book they may differ, and applying them blindly gives you a camera with wrong colours rather than one that works. The precheck warns rather than blocks in that case &mdash; the warning is the point.</p>
+    </div>
+
+    <p>Secure Boot is deliberately excluded from a full run. It needs BIOS steps that cannot be performed from Linux, and it is the only part that can leave a machine unbootable, so it is a guided checklist instead of an automated one.</p>
+
+    <h3>Keeping the record honest</h3>
+    <p>Everything in it except the notes is a <em>copy</em> of something live, and copies drift &mdash; a kernel update rebuilds the DKMS source, a package update rewrites a hook. A record that quietly disagrees with the machine is worse than no record, because it gets trusted.</p>
+    <pre><code>sudo ./sync.sh          <span class="cmt"># report drift, change nothing</span>
+sudo ./sync.sh --pull   <span class="cmt"># refresh the copies, then review with git diff</span></code></pre>
+    <p>35 files compared against their live originals, non-zero exit on drift. It has a real limit worth knowing: it tells you when a <em>tracked</em> file has drifted, but it cannot tell you that something new was never tracked at all. That gap is only found by reading the notes against the directory &mdash; which turned up four things described but not carried, including a fix that existed in exactly one local clone with no remote of its own.</p>
+
+    <h3>What is deliberately absent</h3>
+    <p>Secure Boot private keys and NetworkManager profiles both contain secrets &mdash; the first can sign anything your firmware will trust, the second holds Wi-Fi passwords in plain text. Neither belongs in a record meant to be shared, and their absence is written down so it reads as a decision rather than an oversight.</p>
+  </section>
+
+  <section>
+    <h2><span class="rule"></span>Left alone, on purpose</h2>
+    <ul class="tight">
+      <li><strong>Passkeys cannot be stored on this device.</strong> Linux has no platform authenticator, so device-bound passkeys are impossible despite the TPM 2.0 being present and working. Firefox on Linux supports USB security keys only; Chromium is broader. Today's options are a password manager, a hardware key, or <code>tpm-fido</code> (Chromium only, unpackaged). Native support is on the roadmap, not shipping.</li>
+      <li><strong>Custom touchpad gestures are not bindable</strong> on Plasma 6.7 &mdash; KWin's gesture registration exists in C++ but is not exposed to scripts. Only an external daemon injecting keystrokes could go further, which means a background process and a privilege change for convenience.</li>
+      <li><strong>GNA accelerator</strong> (<code>8086:774c</code>) has no kernel driver. Intel deprecated it; the NPU supersedes it and is fully working. Nothing to do.</li>
+      <li><strong>ACPI errors in dmesg</strong> &mdash; the <code>SEN3.CTYP</code> lookup fails; a firmware bug with no consequence. The <code>_FST</code> fan-status method fails too and <em>was</em> on this list, but it is no longer left alone: a desktop widget was polling it twice a second for a value that never existed, and the resulting 8,000 errors per boot were destroying the evidence any freeze investigation depends on.</li>
+      <li><strong>Audio codec power-save</strong> stays at the distribution default. Changing it risks wake-up pops through amplifiers that only just started working.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2><span class="rule"></span>Secure Boot</h2>
+    <p class="lede">Enabled, with custom keys, booting a signed unified kernel image. Getting here took two false starts, both worth knowing about if you are following the same path.</p>
+
+    <h3>dbx is empty, and fwupd&rsquo;s &ldquo;up to date&rdquo; means nothing</h3>
+    <p>There is no <span class="mono">dbx</span> variable at all &mdash; only <span class="mono">dbxDefault</span>, the firmware&rsquo;s default list, which is not enforced until enrolled. So Secure Boot here enforces <strong>zero revocations</strong>: a Microsoft-signed but known-vulnerable bootloader would still validate, and Microsoft&rsquo;s certificate is in <span class="mono">db</span> because Windows needs it.</p>
+    <p><code>fwupdmgr</code> reports <em>&ldquo;UEFI dbx: latest available firmware version&rdquo;</em>. Ignore that. The device&rsquo;s version reads <span class="mono">None</span> because the variable does not exist, and it carries <span class="mono">only-version-upgrade</span> &mdash; with nothing to compare against it offers nothing. It is not saying dbx is current; it is saying it cannot tell.</p>
+    <p>Before enrolling, check that nothing which boots would be revoked. The hashes must be computed the way UEFI computes them &mdash; <strong>Authenticode</strong>, not a plain <code>sha256sum</code> of the file &mdash; or the comparison is meaningless:</p>
+    <pre><code>443 revoked image hashes, 0 revoked certificates
+  ok  bootmgfw.efi            96da0da4…
+  ok  systemd-bootx64.efi     e424095f…
+  ok  manjaro-7.1-x86_64.efi  384b8c16…
+  ok  grubx64.efi             96241d5d…
+SAFE — nothing that boots here is on the revocation list</code></pre>
+    <p>Zero certificate revocations in the current list means the hash check is complete: nothing can be revoked through its signer instead. Not enrolled yet, because it is close to irreversible &mdash; undoing it means restoring firmware default keys, which also wipes the custom PK, KEK and db and means redoing all of this.</p>
+
+    <div class="cards">
+      <div class="card">
+        <h4>Where it landed</h4>
+        <p><span class="mono">Secure Boot: Enabled (user)</span>, booted via the UKI entry, <span class="mono">Measured UKI: yes</span>. All three out-of-tree modules still load.</p>
+      </div>
+      <div class="card">
+        <h4>What survived</h4>
+        <p>Windows, untouched on its own disk. Every hardware fix. 125 checks passing.</p>
+      </div>
+    </div>
+
+    <div class="watch">
+      <p><strong>Clearing the keys in BIOS resets the fingerprint sensor.</strong> Enrolments do not survive it, whatever the SDCP persistence fix does &mdash; that patch keeps them across <em>reboots</em>, not across a firmware key reset. Do the Secure Boot work first and enrol afterwards, or expect to re-enrol. Losing them at this step is not evidence that the patch failed.</p>
+    </div>
+
+    <h3>False start one: enabling Secure Boot before enrolling</h3>
+    <p>Turning Secure Boot on while the firmware still held only the factory keys meant nothing signed with our own key validated, and both Linux entries failed. Nothing was damaged, but it looks alarming. Enrolment has to happen first, and it can only happen with the firmware in Setup Mode &mdash; which means clearing the existing keys in BIOS, not adding anything there.</p>
+
+    <h3>False start two: assuming GRUB could be made to work</h3>
+    <p>With Secure Boot on, GRUB 2.14 never reaches a menu. It dies loading <em>its own module</em>:</p>
+    <pre><code>error: kern/verifiers.c:grub_verifiers_open:119:
+       verification requested but nobody cares:
+       (hd1,gpt2)/@/boot/grub/x86_64-efi/normal.mod</code></pre>
+    <p>The standard remedy is to rebuild with <code>--disable-shim-lock</code>. That was done, verified present, and <em>it did not help</em>. Two diagnostics that look authoritative and prove nothing:</p>
+    <div class="scroller">
+      <table>
+        <thead><tr><th>Test</th><th>Verdict</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td class="sub"><code>strings | grep shim_lock</code></td><td><span class="chip lim">Useless</span></td><td>Those strings are present either way. The flag writes a module-table entry, not a string.</td></tr>
+          <tr><td class="sub">Reading <span class="mono">kern/efi/sb.c</span></td><td><span class="chip lim">Useless</span></td><td>The copy fetched was from <em>rhboot/grub2</em>, Red Hat's downstream fork &mdash; not the code Manjaro ships.</td></tr>
+          <tr><td class="sub">Parsing the PE <span class="mono">mods</span> section</td><td><span class="chip fix">Valid</span></td><td>Module type 7 appears if and only if the flag was used.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>The marker <em>was</em> present and GRUB still refused. An observed boot failure outranks any amount of source reading. Treat GRUB under Secure Boot on 2.14 as a dead end and move on.</p>
+
+    <h3>What actually works: a unified kernel image</h3>
+    <p>Kernel, initramfs and command line fused into one signed EFI binary the firmware launches directly. No bootloader in the trust chain, so nothing needs to verify loadable modules.</p>
+    <dl class="kv">
+      <dt>Image</dt><dd><code>/boot/efi/EFI/Linux/manjaro-7.1-x86_64.efi</code>, 44 MB, signed by the enrolled db key</dd>
+      <dt>Rebuilt</dt><dd>Automatically on every kernel update via mkinitcpio's <code>default_uki=</code>, and signed by sbctl's hook</dd>
+      <dt>Checked</dt><dd>Kernel and initramfs byte-identical to their standalone files; Intel microcode present in the early CPIO</dd>
+    </dl>
+
+    <h3>Before anything: suspend BitLocker</h3>
+    <div class="watch">
+      <p><strong>If you dual-boot Windows, do this first or you will be locked out of it.</strong> Changing Secure Boot state alters PCR&nbsp;7, which is one of the measurements BitLocker seals its key against. Windows will demand the recovery key at the next boot, and if you do not have that key your data is gone. From an elevated Windows prompt:</p>
+      <pre><code>manage-bde -protectors -disable C: -RebootCount 0</code></pre>
+      <p>That suspends protection until you re-enable it, rather than decrypting anything. Re-enable with <code>manage-bde -protectors -enable C:</code> once Secure Boot is settled. Have the recovery key to hand regardless &mdash; it is in your Microsoft account under <em>Devices &rarr; BitLocker keys</em>.</p>
+      <p>Related, for afterwards: boot Windows from the <em>firmware</em> boot menu rather than chainloading it, at least until protection is re-enabled. Chainloading changes PCR&nbsp;7 too.</p>
+    </div>
+
+    <h3>The order that works</h3>
+    <dl class="kv">
+      <dt>1</dt><dd>Build and sign the UKI while Secure Boot is still off.</dd>
+      <dt>2</dt><dd>BIOS: clear the Secure Boot keys. That is what enters Setup Mode. Enroll nothing here, and leave Secure Boot off.</dd>
+      <dt>3</dt><dd><code>sbctl enroll-keys -m -f</code>. <code>-m</code> keeps Microsoft's certificates so Windows still validates; <code>-f</code> keeps the vendor's own, which Samsung's firmware components need.</dd>
+      <dt>4</dt><dd>Boot the UKI once with Secure Boot still <em>off</em>. One unknown at a time.</dd>
+      <dt>5</dt><dd>BIOS: Secure Boot on.</dd>
+    </dl>
+
+    <h3>Three footguns that make it look bricked</h3>
+    <ul class="tight">
+      <li><strong>A pacman hook hijacking BootOrder.</strong> Running <code>grub-install</code> without <code>--no-nvram</code> moves GRUB to the head of the boot order on every GRUB update, sending you back to rescue.</li>
+      <li><strong>Signed GRUB entries still in BootOrder.</strong> Under Secure Boot the firmware <em>loads</em> them happily and they then die at rescue. There is no graceful fallthrough, and the entry is labelled plain &ldquo;Manjaro&rdquo;, so it is easy to pick by mistake. Remove them from the order.</li>
+      <li><strong>The reset fallback.</strong> <span class="mono">\EFI\BOOT\BOOTX64.EFI</span> is what firmware uses when NVRAM is cleared. If it is a copy of GRUB, that path is broken too. Put something <em>signed</em> there. Here it ended up as a copy of systemd-boot, because <code>bootctl install</code> overwrites that path &mdash; which is the better outcome, since the reset fallback then yields a menu rather than one fixed kernel. The frozen-known-good-UKI idea was tried first and displaced; the old image is kept at <span class="mono">/root/bootx64.efi.uki-fallback.bak</span>.</li>
+    </ul>
+
+    <div class="watch">
+      <p><strong>systemd-boot now provides the OS chooser.</strong> It is signed like everything else, discovers the UKI automatically, and lists Windows alongside it. Because Windows lives on its own disk and systemd-boot only auto-discovers on the partition it booted from, <span class="mono">\EFI\Microsoft</span> is mirrored onto the Linux ESP &mdash; a copy, so it goes stale after a Windows feature update. The symptom is that entry failing with <span class="mono">0xc000000f</span> while Windows still boots perfectly from the firmware menu &mdash; which points you at Windows rather than at a stale copy. <code>gb5-refresh-windows-boot.sh</code> re-mirrors it; run it after any Windows feature update, or whenever that entry misbehaves. The firmware&rsquo;s own Windows entry is never touched and stays as a fallback.</p>
+    </div>
+
+    <h3>Still worth doing</h3>
+    <ul class="tight">
+      <li><strong>dbx is empty.</strong> Only <span class="mono">dbxDefault</span> exists, so the firmware enforces zero revocations &mdash; strictly less protection than factory Secure Boot. Enrolling the revocation list is the last hardening step.</li>
+      <li><strong>Keep the keys backed up off-machine.</strong> Samsung's Knox BIOS Configuration Recovery may revert enrolled keys after a firmware update. Factory restore stays available either way, so this is recoverable rather than fatal.</li>
+      <li><strong>Run <code>sbctl verify</code> after every update, before rebooting.</strong> sbctl's mkinitcpio hook exits successfully when it cannot sign, so pacman can report success over an unsigned image.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2><span class="rule"></span>Containers, and the VPN they share a firewall with</h2>
+    <p class="lede">Docker on a machine that snapshots itself and routes through a mesh VPN is not the stock install. Two independent reviews ran over this before anything was enabled; between them they found a security hole, two settings that were doing nothing, and one place the reviewers disagreed with each other.</p>
+
+    <h3>A published port would have been open to the whole VPN</h3>
+    <p>This is the one that mattered. <code>-p 8080:80</code> binds <span class="mono">0.0.0.0</span>, and Docker inserts its <span class="mono">DOCKER-FORWARD</span> jump at the <strong>top</strong> of the FORWARD chain. NetBird&rsquo;s only inbound guard is the <strong>last</strong> rule:</p>
+    <pre><code>-A FORWARD -i wt0 -j NETBIRD-RT-FWD-IN
+-A FORWARD -m mark --mark 0x1bd20 -j ACCEPT
+-A FORWARD -o wt0 -j NETBIRD-RT-FWD-OUT
+-A FORWARD -i wt0 -j DROP          &lt;-- never reached for a published port</code></pre>
+    <p>So every published port would have been reachable from all of <span class="mono">100.76.0.0/16</span> and from the LAN. Checked against the live ruleset rather than reasoned about. Fixed with <code>"ip": "127.0.0.1"</code> in <span class="mono">daemon.json</span>, which makes exposure opt-in per port.</p>
+
+    <h3>Image layers must not enter the snapshots</h3>
+    <p><span class="mono">/var/lib/docker</span> is its own btrfs subvolume, <span class="mono">@docker</span>, a sibling of <span class="mono">@</span>. Left inside <span class="mono">@</span> it would put tens of GB into every Timeshift snapshot and make a restore roll container state back with the system. containerd&rsquo;s root moved alongside it, because Docker 29 makes the containerd image store the <em>default</em> &mdash; one flag flip and the whole store relocates to <span class="mono">/var/lib/containerd</span>, back inside <span class="mono">@</span>, where the guard cannot see it.</p>
+    <p>Three guards hold that in place, and each catches what the others cannot:</p>
+    <dl class="kv">
+      <dt><span class="mono">nofail</span> in fstab</dt><dd>a mount problem can never drop the machine into emergency mode</dd>
+      <dt><span class="mono">RequiresMountsFor=</span></dt><dd>the mount unit exists but failed</dd>
+      <dt><span class="mono">gb5-docker-preflight</span></dt><dd>the fstab line is missing <em>entirely</em> &mdash; then there is no mount unit for systemd to require</dd>
+    </dl>
+    <p>Proven in both directions: with the subvolume unmounted, Docker refuses to start and zero bytes reach <span class="mono">@</span>.</p>
+
+    <div class="watch">
+      <p><strong>The reviewers disagreed about DNS, and the disagreement was real.</strong> NetBird owns <span class="mono">/etc/resolv.conf</span>. One reviewer wanted a public fallback so containers survive the VPN dropping; the other pointed out that leaks internal names on timeout. Container DNS is pinned to the NetBird resolver with <em>no</em> fallback &mdash; the non-leaking side &mdash; and the cost is stated rather than hidden: no container DNS while NetBird is down. Neither reviewer noticed the pinned address is this host&rsquo;s <em>dynamic</em> wt0 address, so <code>gb5-docker-verify</code> now fails if it drifts.</p>
+    </div>
+
+    <h3>A kernel upgrade takes the VPN down on the next restart</h3>
+    <p>A kernel upgrade deletes <span class="mono">/usr/lib/modules/$(uname -r)</span> while that kernel is still running. NetBird&rsquo;s nftables firewall manager then cannot build its tables, and <strong>every restart fails</strong> with an error that names netlink and never mentions modules. Established by probing each expression separately instead of arguing from the message:</p>
+    <pre><code>table / chain / set / counter   OK
+ct state                        FAIL   nft_ct     is =m, .ko deleted
+fib                             FAIL   nft_fib_ipv4
+masquerade                      FAIL   nft_masq</code></pre>
+    <p>Not version-specific &mdash; 0.77.0 and 0.77.1 fail identically &mdash; and no flag avoids it, because the firewall manager is constructed before any flag is read. The running daemon survives only because it predates the upgrade.</p>
+    <p>The fix did not need a reboot. Every pre-upgrade Timeshift snapshot still holds the module tree, byte-identical; <code>modinfo -F vermagic</code> checked against <span class="mono">/proc/version</span> first, then <code>cp -a</code> and <code>depmod</code>. Those are the originals for the running kernel, not a forced version mismatch.</p>
+
+    <div class="watch">
+      <p><strong>And that repair silently disabled four safety checks.</strong> All four detected a pending reboot by testing whether the module directory exists. Putting the tree back made the pending reboot invisible: the unattended updater would have stacked a second kernel upgrade onto an unrebooted one, and hibernation would have been unmasked while a stale-kernel image could still be written. They now compare kernel <em>versions</em>, which cannot be faked by restoring files. The general lesson: after any repair, ask what now <em>looks</em> healthy that is not.</p>
+    </div>
+
+    <h3>The VPN client was also a local root escalation</h3>
+    <p>NetBird is installed by upstream&rsquo;s <span class="mono">install.sh</span> straight into <span class="mono">/usr/bin</span>, so pacman does not own it and the guarded updater will never touch it. The installer also leaves the binaries owned by the invoking user &mdash; while <span class="mono">netbird.service</span> runs them as <strong>root</strong>. Anything running as that user could overwrite the binary and own root at the next restart. Corrected to <span class="mono">root:root</span>; re-running the installer undoes it.</p>
+    <p>Its tray UI had never appeared for a mundane reason: the default build links against WebKitGTK&nbsp;6.0, which is not installed here. The GTK3 release asset links against the <span class="mono">webkit2gtk-4.1</span> already present, and upstream ships no desktop entry or icon &mdash; which is why nothing was ever in the launcher.</p>
+
+    <h3>Decided against, with reasons</h3>
+    <ul class="tight">
+      <li><strong>No idle-stop timer for the daemon.</strong> Idle cost is roughly 0.1&nbsp;W against a 6.22&nbsp;W baseline. One battery-gauge step is 0.795&nbsp;Wh, so resolving that difference needs about 7.7 hours <em>per arm</em> &mdash; below the noise floor. Socket activation already captures the win that exists: zero cost on days Docker is never used.</li>
+      <li><strong>No pinning builds away from the LP-E cores.</strong> <span class="mono">intel_pstate</span> is active with <span class="mono">hwp</span> and <span class="mono">hfi</span>, so the kernel already receives per-core efficiency hints. Worth knowing that <code>taskset</code> on the client does nothing anyway &mdash; builds run in the daemon&rsquo;s cgroup.</li>
+      <li><strong>No nftables firewall backend.</strong> <span class="mono">iptables</span> here is already <span class="mono">nf_tables</span>, so Docker and NetBird share one backend through one compat layer. Switching would put them in different rule universes.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2><span class="rule"></span>Four freezes, and why none of them left a trace</h2>
+    <p class="lede">A full freeze &mdash; no cursor, no magic SysRq, held the power button. The journal turned out to hold seven abrupt terminations going back three weeks, four of them while the machine was in use. They are two unrelated faults, and the reason neither left evidence was a deliberate setting in this project&rsquo;s own tuning file.</p>
+
+    <h3>The first fault is a kernel use-after-free, and monitor mode triggers it</h3>
+    <p>Two of the four freezes happened while <span class="mono">aircrack-ng</span> was running against the internal BE201. The firmware asserts, the driver tries to recover, and the recovery path is where it dies:</p>
+    <pre><code>iwlwifi: Microcode SW error detected. Restarting 0x0.
+iwlwifi: 0x00000070 | ADVANCED_SYSASSERT
+ieee80211 phy0: Hardware restart was requested
+Oops: general protection fault, probably for non-canonical
+      address 0xdead000000000122
+RIP: 0010:ieee80211_free_chanctx+0x25/0x80 [mac80211]
+            Comm: airodump-ng   Tainted: G OE</code></pre>
+    <p><span class="mono">0xdead000000000122</span> is <span class="mono">LIST_POISON2</span>. The chanctx was freed and then walked again &mdash; a use-after-free in the new <span class="mono">iwlmld</span> op-mode&rsquo;s teardown, reached only because the firmware restart and <span class="mono">airodump</span>&rsquo;s next channel hop race each other. It never appears in a boot without monitor mode: zero microcode errors across every ordinary boot in the journal.</p>
+
+    <div class="watch">
+      <p><strong>Upgrading the kernel does not fix it, and the usual check would have said otherwise.</strong> 7.1.9 to 7.1.13 looked like a chance to inherit a fix. Comparing <span class="mono">srcversion</span> is the easy test and it is weak, so the modules were decompressed and their compiled code hashed directly. <span class="mono">iwlmld</span>, <span class="mono">iwlwifi</span>, <span class="mono">mac80211</span> and <span class="mono">cfg80211</span> are <strong>SHA256-identical</strong> across the two kernels, with <span class="mono">ieee80211_free_chanctx</span> at the same offset <span class="mono">0x614f0</span>. The whole-module files differ by two bytes: the vermagic string. Updating <span class="mono">linux-firmware</span> is equally pointless &mdash; this driver caps at ucode <span class="mono">c102</span> and will not load the <span class="mono">c103</span> and <span class="mono">c106</span> already sitting on disk.</p>
+    </div>
+
+    <p>It is also only <em>sometimes</em> fatal, which is worth stating because it changes what a fix has to do. The same oops fired in two other boots that survived &mdash; one rebooted cleanly, one shut down degraded &mdash; and a third boot logged twenty-four firmware asserts with no oops at all and shut down normally. The freeze happens when the dying worker thread happens to hold a contended net lock. In the fatal boots the machine limped on for about seven and a half minutes, the power-profile timer still ticking once a minute, before it stopped answering entirely.</p>
+    <p>Only one thing removes this: not using this adapter for monitor mode. An external USB adapter on <span class="mono">ath9k_htc</span> or <span class="mono">mt76</span> bypasses <span class="mono">iwlmld</span> altogether. Short of that, <code>gb5-monitor-mode on</code> reloads <span class="mono">iwlwifi</span> with <span class="mono">fw_restart=0</span> for the length of a session, so an assert leaves the adapter down instead of entering the teardown path. That is a session toggle and deliberately not a <span class="mono">modprobe.d</span> default: permanently disabling firmware restart means any blip kills Wi-Fi until a reload.</p>
+
+    <h3>The second fault left nothing at all &mdash; because nothing was watching</h3>
+    <p>The other two freezes have no crash signature of any kind. Machine checks, EDAC, thermal, GPU resets, PCIe AER, RCU stalls, hung tasks, OOM &mdash; all clean, and the log simply stops mid-sentence. The tempting conclusion is a platform-level hang below the kernel&rsquo;s ability to log anything. That conclusion is wrong, and correcting it mattered more than it first appeared.</p>
+    <p>This machine had <span class="mono">kernel.nmi_watchdog = 0</span>, committed months earlier to save a PMU counter and one timer interrupt per CPU. An ordinary <em>software</em> hard lockup &mdash; a CPU spinning with interrupts disabled, in any driver &mdash; produces exactly this signature when the hard-lockup detector is switched off and there is no crash-dump backend. &ldquo;No evidence&rdquo; was fully explained by &ldquo;nothing was looking&rdquo;. These freezes are undetected, not proven to be firmware.</p>
+
+    <h3>The real defect was that recoverable faults became permanent hangs</h3>
+    <p>Three settings between them guaranteed that anything going wrong would end as a dead machine rather than a reboot:</p>
+    <dl class="kv">
+      <dt><span class="mono">panic_on_oops = 0</span></dt><dd>the oops killed one thread and left it holding a mac80211 lock</dd>
+      <dt><span class="mono">nmi_watchdog = 0</span></dt><dd>a hard lockup had no detector at all</dd>
+      <dt><span class="mono">kernel.panic = 0</span></dt><dd>and a panic would have hung rather than rebooted</dd>
+    </dl>
+    <p>All three are now inverted, with <span class="mono">hardlockup_panic</span> and <span class="mono">softlockup_panic</span> alongside them and a twenty-second reboot. The PMU counter is spent deliberately: recoverability is worth more here than a few milliwatts. Because a perf-based detector cannot fire if the local APIC itself stops, the PCH&rsquo;s own <span class="mono">iTCO</span> watchdog is armed too, at <span class="mono">RuntimeWatchdogSec=30s</span> &mdash; it sits outside the CPU cores and recovers the machine when nothing on them is still running.</p>
+    <p>A panic that reboots still teaches nothing if it takes its evidence with it, so <span class="mono">ramoops</span> now persists the dump across the warm reboot into an 8&nbsp;MiB region reserved with <span class="mono">reserve_mem=8M:4096:oops</span>. The name-based form avoids hardcoding a physical address. EFI&nbsp;pstore was considered and rejected: it writes crash logs into UEFI NVRAM, and this firmware has not earned that. A signed 6.12 LTS unified image was added as a second boot entry at the same time, because arming automatic reboot without an escape hatch is how a boot-time panic becomes a loop.</p>
+
+    <div class="watch">
+      <p><strong>Adding that fallback kernel armed a latent bug that would have booted the wrong one.</strong> <code>gb5-ensure-uki.sh</code> picked the default boot entry by <em>mtime</em>, so the most recently <em>built</em> image won &mdash; which is the older LTS. Worse, it compared that against <span class="mono">Default Boot Loader Entry:</span>, an empty section <em>header</em> in <code>bootctl</code> output; the value lives under <span class="mono">Default Entry:</span>. The comparison could never match, so it rewrote the default on <em>every</em> run. Its hook fires on <span class="mono">Target = linux*</span>, which matches all seventeen <span class="mono">linux-firmware-*</span> packages, so the next weekly unattended update would have quietly pointed the machine at 6.12 &mdash; a kernel whose camera and speaker modules do not build. Found by a review, not by the person who introduced it. It now sorts by version, excludes fallback images, and <code>gb5-verify.sh</code> asserts the result.</p>
+    </div>
+
+    <h3>Eight thousand errors a boot were burying the evidence</h3>
+    <p>Every boot logged around 8,000 copies of one ACPI error: this firmware&rsquo;s fan-status method, <span class="mono">\_SB.PC00.LPCB.FAN0._FST</span>, fails on every call, twice a second. It was the last line written before one of the silent freezes, which made it look like a cause. It is not &mdash; but it was destroying the ring buffer that any future investigation depends on.</p>
+    <p><span class="mono">thermald</span> was the obvious suspect and was wrong. Stopping it for fifteen seconds changed the rate by nothing; pausing KDE&rsquo;s <span class="mono">ksystemstats</span> dropped it to zero. A desktop widget was polling the sensor at 2&nbsp;Hz. The readout it was fetching never worked at all: <span class="mono">fan1_input</span> returns <span class="mono">-EIO</span> unconditionally, so the widget had been displaying nothing while generating eight thousand kernel errors per boot for it.</p>
+
+    <div class="watch">
+      <p><strong>The first fix measured clean and was still wrong.</strong> Turning the fan off in the widget&rsquo;s settings gave zero errors over thirty seconds &mdash; and the flood returned at exactly 2.00/s after the next reboot. That setting governs whether the applet <em>displays</em> the sensor, not whether <span class="mono">ksystemstats</span> subscribes to it. A measurement taken in the same session proves nothing about a poller that re-subscribes at login; the only honest test is a reboot. The fix that holds is a udev rule making <span class="mono">fan1_input</span> root-readable, so an unprivileged poll never reaches the failing AML. One error per boot now, from before udev runs.</p>
+    </div>
+
+    <p>None of this diagnoses the two silent freezes. It makes them diagnosable: the next one reboots the machine instead of killing it, and leaves the dump behind. The outstanding lead is a BIOS update. That cannot be done from here: Samsung does not publish to LVFS, so <code>fwupdmgr</code> reports no updates and always will &mdash; an ESRT entry exists, but with nothing to apply. The route is Samsung Update from the Windows install on the other disk, which is worth knowing before concluding the firmware is current because Linux said so.</p>
+  </section>
+
+  <section>
+    <h2><span class="rule"></span>Ten weeks unattended, and the kernel bump nobody watched</h2>
+    <p class="lede">After 12 September nobody touched this machine&rsquo;s setup. The weekly guarded updater kept running: eight times, six updates, one correct refusal on a broken mirror, one &ldquo;nothing to do&rdquo;. Every update ended &ldquo;Update complete and verified.&rdquo; The first kernel-series bump it ever met alone showed what that sentence did not cover.</p>
+
+    <p>On 11 November it applied 602 packages on battery, including Manjaro retiring <span class="mono">linux71</span> (7.1.13) for <span class="mono">linux72</span> (7.2.9) in a single transaction, and GRUB 2.14 &rarr; 2.16. What held: the new kernel got a signed unified image, the default boot entry followed it, all three DKMS modules rebuilt, the hibernation resume offset stayed put, and the patched fingerprint library was protected. Four check failures sat unread in the log.</p>
+
+    <h3>What had quietly gone wrong</h3>
+    <dl class="kv">
+      <dt>Kernel branch skipped</dt><dd>The updater recognised a kernel update by the package name <span class="mono">linux71</span>. A series bump <em>replaces</em> that package, so the name never appeared and the whole branch (hibernation lock until reboot, fallback rebuild, reboot notice) silently did not run. Had the machine hibernated in the seven minutes before it shut down, the image would have been unresumable. It shut down. That was luck.</dd>
+      <dt>Last-resort loader</dt><dd>Manjaro&rsquo;s own GRUB hook copied a GRUB built <em>without</em> <span class="mono">--disable-shim-lock</span> over <span class="mono">\EFI\BOOT\BOOTX64.EFI</span>: the file firmware falls back to after an NVRAM reset, exactly what a BIOS update can cause. Under Secure Boot that GRUB refuses the kernel.</dd>
+      <dt>Fallback image</dt><dd>Still carried 7.1.13, whose modules had been deleted: a signed menu entry booting without graphics, Wi-Fi or camera.</dd>
+      <dt>Signing database</dt><dd>sbctl tracked two deleted files and none of the three live kernel images. <code>sbctl sign -s</code> on an already-signed file returns success without recording it.</dd>
+      <dt>Smaller</dt><dd>An orphaned <span class="mono">linux71</span> preset made every <code>mkinitcpio -P</code> fail, breaking the printed rollback recipe. The <span class="mono">.pacnew</span> check compared mtimes, which pacman sets to the package&rsquo;s build date, so it could never fire.</dd>
+    </dl>
+
+    <h3>The fix: decide from state, and guard after every transaction</h3>
+    <p>A new hook, <code>gb5-boot-guard.sh</code>, runs last in every boot-relevant pacman transaction, however it was started. It checks signatures with <span class="mono">sbverify</span> against this machine&rsquo;s own key and keeps four things true:</p>
+    <ul>
+      <li>the last-resort loader is the signed systemd-boot</li>
+      <li>the fallback image&rsquo;s kernel still has its modules</li>
+      <li>sbctl&rsquo;s database matches the disk</li>
+      <li>everything it tracks is actually signed</li>
+    </ul>
+    <p>It also keeps systemd-boot itself current through a pre-signed copy, and has a read-only <code>--check</code> mode. Manjaro&rsquo;s GRUB hook is disabled. The updater now detects a kernel change from what changed on disk, never from a name, and tells a running-kernel replacement apart from an LTS-only update. Snapshot pruning and a weekly Flatpak update were switched on, so the machine maintains itself.</p>
+
+    <div class="watch">
+      <p><strong>The first draft of the fix repeated the bug it was fixing.</strong> An adversarial review, run before anything was committed, found four faults:</p>
+      <ul>
+        <li>Pre-signed-loader freshness was judged by <em>mtime</em>, the same mistake as the <span class="mono">.pacnew</span> check. It would have frozen systemd-boot forever.</li>
+        <li>The stale-module cleanup treated <em>any</em> pacman error as &ldquo;no owner&rdquo; and <code>rm -rf</code>&rsquo;d on it.</li>
+        <li>The verification suite called the repair tool, so a check could erase the evidence it was checking.</li>
+        <li>An LTS-only update would have masked hibernation and asked for a pointless reboot.</li>
+      </ul>
+      <p>All four are fixed and tested by fault injection: a deliberately removed database entry was reported by <code>--check</code> and left alone, then repaired. A real GRUB reinstall then exposed one more pre-existing gap, a GRUB-only update leaving <span class="mono">grubx64.efi</span> unsigned, which the guard now closes.</p>
+    </div>
+
+    <p>Two corrections to earlier chapters:</p>
+    <ul>
+      <li><strong>The firmware.</strong> The BIOS <em>was</em> updated, to P06RHH.300, from Windows in late September. pstore has been empty since and every boot has ended cleanly. That is correlation across about 25 boots, not proof the silent freezes are gone.</li>
+      <li><strong>dbx.</strong> It is now enrolled.</li>
+    </ul>
+    <p>Still unproven on 7.2: one hibernate cycle, a fingerprint touch (nothing is enrolled), speaker and camera use, a boot of the LTS image, and the rewritten kernel branch itself. It meets real input at the next point release.</p>
+  </section>
+
+  <footer>
+    Verified on kernel 7.2.9-1-MANJARO, 19 November 2026, on the same boot the boot-chain fixes were made. A reboot re-check is still owed. Final state: Secure Boot enabled, booting a signed unified kernel image through a systemd-boot menu, with a signed 7.2 fallback and a 6.12 LTS image beside it. The last-resort loader is systemd-boot, and a hook keeps it that way after every update. Hibernation works to a 20&nbsp;GiB btrfs swapfile. Pacman updates run weekly through the guarded updater, Flatpaks weekly on AC, and old snapshots are pruned. A freeze panics, records the dump to <span class="mono">ramoops</span> and reboots. 133 of 135 system checks pass; the two failures are an empty fingerprint enrolment, a deliberate omission rather than a fault. Every claim was checked against the running system, and the conclusions that turned out to be wrong are described as they were corrected, not quietly rewritten: <span class="mono">thermald</span> blamed for the ACPI flood, the traceless freezes called firmware-level, &ldquo;verified&rdquo; read as &ldquo;the kernel bump was handled&rdquo;, and four faults in the fix itself. Claims that could not be tested from Linux, such as how the panel looks to a human eye, are labelled as such.
+    </footer>
+</div>

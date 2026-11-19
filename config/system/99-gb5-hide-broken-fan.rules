@@ -1,0 +1,15 @@
+# The ACPI fan's _FST method is broken in this machine's firmware: every read of
+# fan1_input returns -EIO, and each attempt evaluates failing AML that the kernel
+# logs as an ACPI Error. KDE's ksystemstats polls it at 2 Hz -> ~8000 kernel
+# errors per boot, which buries the ring buffer and was a large part of why the
+# 2026-09-11 silent freezes appeared to leave "no trace".
+#
+# The sensor is 100% non-functional (never returns a value), so nothing is lost
+# by hiding it from unprivileged readers. There is no cleaner lever: the driver
+# is CONFIG_ACPI_FAN=y (built in, not blacklistable), /sys/bus/acpi/drivers has
+# no fan entry to unbind, and cooling_device0 is in no thermal zone's cooling
+# policy because the EC drives the fan in firmware anyway.
+#
+# Revert: delete this file, then `udevadm control --reload && udevadm trigger`.
+ACTION=="add|change", SUBSYSTEM=="hwmon", ATTR{name}=="acpi_fan", \
+  RUN+="/usr/bin/chmod 0600 /sys%p/fan1_input"

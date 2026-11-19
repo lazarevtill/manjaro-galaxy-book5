@@ -1,0 +1,61 @@
+# Manjaro on the Samsung Galaxy Book5 Pro H
+
+> Complete enablement record for Manjaro Linux on the Samsung Galaxy Book5 Pro H
+> (model 965XHD / NT965XHW-A71AR, Intel Core Ultra 7 255H, Arrow Lake-H, family 6
+> model 0xC5), KDE Plasma 6 on Wayland, kernel 7.2. Every fix as code (scripts,
+> configs, DKMS sources, PKGBUILDs), every measurement, and every wrong
+> conclusion with how it was caught. Fixes are per-board (965XHD); on other
+> Galaxy Book models verify clocks, Bayer order and amplifier addresses first.
+
+Read AGENTS.md before changing anything on a machine. It lists what is non-stock,
+the traps that produced 36 recorded wrong conclusions, and the editing rule:
+files in bin/, systemd/ and config/ mirror live files — change both, then
+`sudo ./sync.sh` must report 0 drifted. `sudo gb5-verify.sh` (135 checks) is the
+source of truth for machine state.
+
+Web version: https://gb5.lazarev.cloud — Source: https://github.com/lazarevtill/manjaro-galaxy-book5
+
+## Start
+
+- [AGENTS.md](AGENTS.md): operational guide for agents — non-stock components, traps, update procedure, layout
+- [README.md](README.md): human overview, repository layout, the commands you run
+- [HISTORY.md](HISTORY.md): the narrative in eight phases, each with "what went wrong"
+- [TASKS.md](TASKS.md): open work, decisions waiting on the owner, closed items
+- [docs/README.md](docs/README.md): index of all topic notes
+
+## Hardware
+
+- [docs/hardware/setup-notes.md](docs/hardware/setup-notes.md): camera (OV02E10 at 26 MHz), speakers (4x MAX98390), fingerprint (Egis 1c7a:05a5, SDCP)
+- [docs/hardware/audit-results.md](docs/hardware/audit-results.md): settled facts about hotkeys, sensors, codecs — do not re-investigate
+- [docs/hardware/camera-pipeline.md](docs/hardware/camera-pipeline.md): GPU camera relay and its benchmarking traps
+- [docs/hardware/npu-camera-effects.md](docs/hardware/npu-camera-effects.md): background blur on the NPU / GPU
+- [docs/hardware/wireless-and-6ghz.md](docs/hardware/wireless-and-6ghz.md): BE201 Wi-Fi 7; 6 GHz is BIOS-gated
+
+## Power
+
+- [docs/power/battery-plan.md](docs/power/battery-plan.md): measured power budget and what is worth tuning
+- [docs/power/power-and-tuning.md](docs/power/power-and-tuning.md): knob ownership, measurement method, rejected tunings
+
+## System
+
+- [docs/system/secureboot-uki.md](docs/system/secureboot-uki.md): Secure Boot with a signed UKI behind systemd-boot
+- [docs/system/hibernation.md](docs/system/hibernation.md): hibernation to a btrfs swapfile, and its hazards
+- [docs/system/snapshots-and-rollback.md](docs/system/snapshots-and-rollback.md): Timeshift and DKMS-safe rollback
+- [docs/system/encryption.md](docs/system/encryption.md): disk encryption plan (not executed)
+- [docs/system/docker.md](docs/system/docker.md): Docker on a dedicated btrfs subvolume, VPN port exposure
+- [docs/system/netbird.md](docs/system/netbird.md): NetBird client caveats
+- [docs/system/pam.md](docs/system/pam.md): PAM for fingerprint auth
+
+## Code
+
+- [bin/gb5-verify.sh](bin/gb5-verify.sh): 135-check health suite
+- [bin/gb5-safe-update](bin/gb5-safe-update): guarded unattended update (weekly timer)
+- [bin/gb5-boot-guard.sh](bin/gb5-boot-guard.sh): keeps the boot chain right after every pacman transaction
+- [setup/README.md](setup/README.md): step-by-step reproduction on another machine
+- [sync.sh](sync.sh): drift report between this repo and the live system
+
+## Optional
+
+- [docs/not-included.md](docs/not-included.md): deliberately absent items (secrets, separate projects)
+- [docs/publishing.md](docs/publishing.md): editing and publishing the web page in site/
+- [docs/archive/morning-summary-2026-08-22.md](docs/archive/morning-summary-2026-08-22.md): historical overnight run

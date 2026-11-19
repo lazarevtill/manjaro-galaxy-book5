@@ -1,0 +1,104 @@
+#!/bin/bash
+# Put the result of an unattended update in front of whoever is logged in.
+#
+# A silent failure is the whole risk of automating this: the machine keeps
+# working until the next reboot and then does not. Journal-only is not enough.
+#
+# The outcomes are NOT interchangeable. "Pre-flight refused, nothing touched" and
+# "updated but verification failed" need opposite advice: for a pending reboot,
+# rebooting IS the fix, and telling that user to restore a snapshot points them
+# at a healthy system with a destructive recipe.
+status="${1:-0}"; result="${2:-unknown}"
+STATUS=/run/gb5-safe-update.status
+STATEDIR=/var/lib/gb5
+MOTD=/etc/motd.d/gb5-update
+
+outcome=""; detail=""; kernel_updated=0; kernel_from=""; kernel_to=""; pacnew=""
+# shellcheck disable=SC1090
+[ -r "$STATUS" ] && . "$STATUS"
+
+# The unit failed but the script never got far enough to record why (OOM, SIGKILL
+# at shutdown, timeout). Do not guess an outcome -- say that it is unknown, which
+# is itself the thing to investigate.
+if [ -z "$outcome" ]; then
+    if [ "$status" = "0" ] && [ "$result" = "success" ]; then outcome=updated; detail="finished"
+    else outcome=killed; detail="the run did not finish and left no status (result=$result)"; fi
+fi
+
+ROLLBACK="Roll back in this order:
+  1. swapoff /swap/swapfile; mkswap /swap/swapfile; swapon /swap/swapfile
+     (destroy any hibernation image FIRST — restoring with one live strands it
+      over a rolled-back filesystem, which is btrfs corruption)
+  2. timeshift --list; timeshift --restore --snapshot '<tagged gb5-safe-update>'
+  3. mkinitcpio -P && sbctl sign-all && sbctl verify   (a restore misses the ESP)"
+
+case "$outcome" in
+  nothing-to-do)
+      urgency=low;      title="No updates"; body="Nothing pending."; prio=info ;;
+  updated)
+      urgency=normal;   title="System updated"
+      body="$detail."
+      if [ "$kernel_updated" = "1" ]; then
+          body="$body
+Kernel $kernel_from -> $kernel_to. REBOOT to pick it up — hibernation is masked until you do."
+      fi
+      [ -n "${pacnew// /}" ] && body="$body
+New .pacnew files to merge: $pacnew"
+      prio=info ;;
+  refused)
+      urgency=normal;   title="Update skipped — nothing was changed"
+      body="$detail.
+The system is untouched, so there is nothing to roll back.
+Run: sudo gb5-safe-update --check   to see what it objected to."
+      prio=warning ;;
+  update-failed)
+      urgency=critical; title="Update FAILED during pacman"
+      body="$detail.
+See /tmp/gb5-update.log. The pre-update snapshot exists.
+$ROLLBACK"
+      prio=err ;;
+  verify-failed)
+      urgency=critical; title="Update finished but verification FAILED"
+      body="$detail.
+Do NOT reboot until checked. Run: sudo gb5-safe-update --check
+$ROLLBACK"
+      prio=err ;;
+  killed)
+      # It did NOT finish, so do not say it did. A transaction interrupted
+      # between mkinitcpio and the signing hook leaves an unsigned UKI, which
+      # under Secure Boot looks exactly like a bricked machine.
+      urgency=critical; title="Update was INTERRUPTED part-way"
+      body="$detail.
+The transaction may be half-applied and the UKI may be unsigned.
+Check BEFORE rebooting: sudo sbctl verify | grep -v /EFI/Microsoft/
+                        sudo gb5-safe-update --check
+A stale /var/lib/pacman/db.lck may need removing once no pacman is running.
+$ROLLBACK"
+      prio=err ;;
+  *)
+      urgency=critical; title="Update ended in an unknown state"
+      body="outcome=$outcome status=$status result=$result. Run: sudo gb5-verify.sh"
+      prio=err ;;
+esac
+
+logger -p "user.$prio" -t gb5-safe-update "unattended update: $outcome ($detail)"
+
+# Durable channels first: these survive having no session, a logout, or a
+# notification daemon that was not running. The desktop popup is best-effort.
+mkdir -p "$STATEDIR" "$(dirname "$MOTD")" 2>/dev/null
+if [ "$prio" = "info" ]; then rm -f "$MOTD" 2>/dev/null
+else printf '[gb5-safe-update] %s\n%s\n\n' "$title" "$body" > "$MOTD" 2>/dev/null; fi
+printf '%s\n%s\n' "$title" "$body" > "$STATEDIR/last-update-message" 2>/dev/null
+
+delivered=0
+while read -r uid user; do
+    [ -S "/run/user/$uid/bus" ] || continue
+    sudo -u "$user" \
+        DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
+        notify-send -u "$urgency" -i system-software-update "$title" "$body" 2>/dev/null \
+        && delivered=1
+done < <(loginctl list-sessions --no-legend 2>/dev/null | awk '{print $2, $3}' | sort -u)
+
+[ "$delivered" -eq 0 ] && [ "$prio" != "info" ] && \
+    logger -p user.err -t gb5-safe-update "no graphical session took the notification; left in $MOTD and $STATEDIR/last-update-message"
+exit 0

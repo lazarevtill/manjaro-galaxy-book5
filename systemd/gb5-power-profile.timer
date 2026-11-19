@@ -1,0 +1,12 @@
+[Unit]
+Description=Reassert the platform profile as the battery drains
+
+[Timer]
+# Every minute. The battery cannot cross a 5-point hysteresis band faster than
+# that, and the script exits in milliseconds when there is nothing to do.
+OnBootSec=1min
+OnUnitActiveSec=1min
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target

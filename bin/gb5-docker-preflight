@@ -1,0 +1,40 @@
+#!/bin/bash
+# Refuse to start Docker/containerd unless their data really is on @docker,
+# and unless the kernel can actually provide overlayfs.
+#
+# /var/lib/docker is mounted 'nofail' so a mount problem cannot drop this laptop
+# into emergency mode at boot. The cost of nofail is that a failed mount is
+# SILENT -- Docker would write image layers into the directory inside @ instead,
+# putting tens of GB into every Timeshift snapshot and making a restore roll
+# container state back with the system. This turns that silent failure loud.
+#
+# Two layers cover each other's blind spot: RequiresMountsFor (in the unit
+# drop-ins) catches a mount that failed, and this catches an fstab line that is
+# missing entirely -- in which case no mount unit exists for systemd to require.
+set -u
+
+# Anchored: an unanchored 'subvol=/@docker' would also match 'subvol=/@docker-old'.
+# findmnt prints options comma-separated, so the subvolume name must be followed
+# by a comma or end-of-string.
+opts=$(findmnt -no OPTIONS /var/lib/docker 2>/dev/null)
+# grep -c, never grep -q in a pipeline: see AGENTS.md. A matching grep -q exits
+# early, SIGPIPEs the producer, and under pipefail inverts the test.
+if [ "$(printf '%s' "$opts" | grep -c 'subvol=/@docker\(,\|$\)')" -eq 0 ]; then
+    echo "gb5-docker-preflight: /var/lib/docker is NOT the @docker subvolume." >&2
+    echo "  findmnt says: ${opts:-<not a mount point at all>}" >&2
+    echo "  Refusing to start: Docker would write into @ and pollute every snapshot." >&2
+    echo "  Fix:  sudo mount /var/lib/docker   (check the entry in /etc/fstab)" >&2
+    exit 1
+fi
+
+# Between a kernel upgrade and the reboot, /usr/lib/modules/$(uname -r) is gone,
+# so overlay cannot load. Without this check dockerd fails with an opaque
+# storage-driver error instead of saying the one thing that fixes it.
+if ! modprobe -n overlay >/dev/null 2>&1; then
+    echo "gb5-docker-preflight: the kernel cannot provide 'overlay'." >&2
+    echo "  Running kernel: $(uname -r)" >&2
+    echo "  Installed:      $(ls -1 /usr/lib/modules 2>/dev/null | grep -v extramodules | tr '\n' ' ')" >&2
+    echo "  If those differ, a kernel update is pending: REBOOT first." >&2
+    exit 1
+fi
+exit 0

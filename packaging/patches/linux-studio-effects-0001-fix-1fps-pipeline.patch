@@ -1,0 +1,361 @@
+From e9c786d505025c7a95553b4b04b4464926c3fe32 Mon Sep 17 00:00:00 2001
+From: lazarevtill <lazarevtill@lazarev.cloud>
+Date: Fri, 21 Aug 2026 19:36:04 +0200
+Subject: [PATCH] Fix 1 fps pipeline: drain the camera in its own thread
+
+A V4L2 device hands out a small ring of buffers (v4l2loopback defaults to
+two). Reading them in a tight loop costs ~25 ms per read, the true frame
+interval. Doing ~30 ms of work between reads makes the reads themselves
+block: measured 274 ms, then 977 ms, degrading run over run as the consumer
+falls behind the producer. The frames were being produced fine throughout --
+the bridge held 40 fps -- the reader was stuck waiting on a queue it could no
+longer keep up with. Result was 1.0 fps out of a pipeline whose actual work
+takes 31 ms.
+
+Drain continuously in a separate thread and let the processing loop take the
+newest frame. Frames it cannot keep up with are dropped rather than queued,
+which is what live video wants. 1.0 fps -> 30 fps.
+
+Three smaller fixes found on the way:
+
+- Open with cv2.CAP_V4L2 explicitly. Left to choose, OpenCV 5 tries GStreamer
+  first, which fails on a v4l2loopback device that already has a producer
+  attached, and the failure surfaces as "camera busy/unavailable".
+
+- Do not set a capture size the device does not offer. A device with a single
+  discrete mode keeps its own format and every read then stalls ~1 s, which
+  looks like slow hardware rather than a rejected request. Check what the
+  device came back with and restore its format if it refused.
+
+- Blur a quarter-size copy. A separable Gaussian is O(kernel) per pixel, so
+  the 51-tap default over 1920x1088x3 ran ~12 ms -- comparable to the NPU
+  segmentation it accompanies, and invisible in the result, since the detail
+  being discarded is exactly what the blur exists to destroy.
+
+Also adds a processing resolution distinct from the capture resolution, and
+per-stage timings on the FPS log line, which is how the above was found.
+
+Measured on Arrow Lake-H (Core Ultra 7 255H): MODNet FP16 at 256x256 runs
+11.3 ms/frame on the NPU.
+---
+ config/default.toml             |  11 ++-
+ src/effects/background.py       |  26 +++++-
+ src/pipeline/camera_pipeline.py | 154 +++++++++++++++++++++++++++++---
+ 3 files changed, 172 insertions(+), 19 deletions(-)
+
+diff --git a/config/default.toml b/config/default.toml
+index 767c46f..001ac63 100644
+--- a/config/default.toml
++++ b/config/default.toml
+@@ -1,12 +1,17 @@
+ [camera]
+ device_index = 0
++# The relay loopback offers exactly one discrete size, 1920x1088, so cap.set()
++# cannot change what arrives. These are the PROCESSING and output size instead;
++# frames are downscaled right after capture. 720p is what a meeting client
++# re-encodes to anyway, and compositing at 2 MP costs more than the NPU
++# segmentation does.
+ width = 1280
+ height = 720
+ fps = 30
+ mirror = true
+ 
+ [virtual_camera]
+-device_path = "/dev/video10"
++device_path = "/dev/video60"
+ label = "StudioEffects"
+ 
+ [inference]
+@@ -14,13 +19,13 @@ device = "NPU"
+ fallback_device = "CPU"
+ 
+ [effects.background]
+-enabled = false
++enabled = true
+ mode = "blur"  # "blur", "replace", "none"
+ blur_strength = 51
+ background_image = ""
+ 
+ [effects.auto_frame]
+-enabled = true
++enabled = false
+ zoom_margin = 2.2
+ smoothing_factor = 0.04
+ detection_interval = 1  # run face detection every N frames
+diff --git a/src/effects/background.py b/src/effects/background.py
+index b81351d..2b442e0 100644
+--- a/src/effects/background.py
++++ b/src/effects/background.py
+@@ -102,8 +102,7 @@ class BackgroundEffect(BaseEffect):
+         alpha_3ch = np.stack([alpha] * 3, axis=-1)
+ 
+         if self.config.mode == "blur":
+-            blur_size = self.config.blur_strength | 1
+-            blurred = cv2.GaussianBlur(frame, (blur_size, blur_size), 0)
++            blurred = self._blur_background(frame)
+             composited = (frame * alpha_3ch + blurred * (1.0 - alpha_3ch)).astype(np.uint8)
+         elif self.config.mode == "replace":
+             background = self._get_background(frame.shape)
+@@ -113,6 +112,29 @@ class BackgroundEffect(BaseEffect):
+ 
+         return composited
+ 
++    # A separable Gaussian costs O(kernel) per pixel, so a 51-tap kernel over
++    # 1920x1088x3 runs ~12 ms -- comparable to the NPU segmentation it is meant
++    # to accompany, and pure waste. Blur a quarter-size copy instead: 16x fewer
++    # pixels and a proportionally smaller kernel. The result is visually
++    # identical because the detail being discarded is exactly what the blur
++    # exists to destroy, and the upscale contributes its own smoothing.
++    _BLUR_DOWNSCALE = 4
++
++    def _blur_background(self, frame: np.ndarray) -> np.ndarray:
++        height, width = frame.shape[:2]
++        scale = self._BLUR_DOWNSCALE
++        blur_size = self.config.blur_strength | 1
++
++        if min(height, width) < scale * 8:
++            return cv2.GaussianBlur(frame, (blur_size, blur_size), 0)
++
++        small = cv2.resize(
++            frame, (width // scale, height // scale), interpolation=cv2.INTER_AREA
++        )
++        kernel = max(3, (blur_size // scale) | 1)
++        small = cv2.GaussianBlur(small, (kernel, kernel), 0)
++        return cv2.resize(small, (width, height), interpolation=cv2.INTER_LINEAR)
++
+     def _get_background(self, target_shape: tuple[int, ...]) -> np.ndarray:
+         frame_height, frame_width = target_shape[:2]
+ 
+diff --git a/src/pipeline/camera_pipeline.py b/src/pipeline/camera_pipeline.py
+index 7ee437c..c611192 100644
+--- a/src/pipeline/camera_pipeline.py
++++ b/src/pipeline/camera_pipeline.py
+@@ -2,6 +2,7 @@ from __future__ import annotations
+ 
+ import logging
+ import signal
++import threading
+ import time
+ 
+ import cv2
+@@ -60,11 +61,14 @@ class CameraPipeline:
+         logger.info("All effects initialized")
+ 
+     def _try_open_camera(self) -> cv2.VideoCapture | None:
++        # Ask for V4L2 explicitly. Left to choose, OpenCV 5 tries GStreamer
++        # first, which fails to open a v4l2loopback device that already has a
++        # producer attached -- and then reports it as "busy/unavailable", which
++        # sends you looking for a phantom conflict. The same device opens
++        # immediately with cv2.CAP_V4L2.
+         preferred = self.config.camera.device_index
+-        cap = cv2.VideoCapture(preferred)
+-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.config.camera.width)
+-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.config.camera.height)
+-        cap.set(cv2.CAP_PROP_FPS, self.config.camera.fps)
++        cap = cv2.VideoCapture(preferred, cv2.CAP_V4L2)
++        self._request_format(cap)
+ 
+         if cap.isOpened():
+             return cap
+@@ -77,10 +81,8 @@ class CameraPipeline:
+         for camera in detect_cameras():
+             if camera.device_index == preferred:
+                 continue
+-            alt_cap = cv2.VideoCapture(camera.device_index)
+-            alt_cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.config.camera.width)
+-            alt_cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.config.camera.height)
+-            alt_cap.set(cv2.CAP_PROP_FPS, self.config.camera.fps)
++            alt_cap = cv2.VideoCapture(camera.device_index, cv2.CAP_V4L2)
++            self._request_format(alt_cap)
+ 
+             if alt_cap.isOpened():
+                 self.config.camera.device_index = camera.device_index
+@@ -91,6 +93,84 @@ class CameraPipeline:
+         logger.warning("No cameras available")
+         return None
+ 
++    def _request_format(self, cap: cv2.VideoCapture) -> None:
++        """Ask for the configured size only if the device actually offers it.
++
++        Setting a frame size a V4L2 device does not support does not fail
++        loudly. The device keeps its own format and every subsequent read()
++        blocks for about a second before returning a frame -- measured here at
++        976 ms per frame against 24 ms when the request matches, which looks
++        exactly like a slow camera rather than a bad request. The relay loopback
++        offers a single discrete size, so any config that disagrees with it hits
++        this. Leave the capture format alone in that case and downscale after
++        the read instead; _resize_to handles it.
++        """
++        if not cap.isOpened():
++            return
++
++        native_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
++        native_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
++        want_width = self.config.camera.width
++        want_height = self.config.camera.height
++
++        if (want_width, want_height) == (native_width, native_height):
++            return
++
++        cap.set(cv2.CAP_PROP_FRAME_WIDTH, want_width)
++        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, want_height)
++
++        got_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
++        got_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
++        if (got_width, got_height) != (want_width, want_height):
++            logger.info(
++                "Camera refused %dx%d and kept %dx%d; restoring its own format",
++                want_width, want_height, got_width, got_height,
++            )
++            cap.set(cv2.CAP_PROP_FRAME_WIDTH, native_width)
++            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, native_height)
++
++    def _start_grabber(self, cap: "cv2.VideoCapture") -> None:
++        """Drain the camera in its own thread and keep only the newest frame.
++
++        A V4L2 device hands out a small ring of buffers -- v4l2loopback defaults
++        to two. Read them in a tight loop and each read costs ~25 ms, the true
++        frame interval. Do 30 ms of work between reads and the reads themselves
++        start blocking: measured 274 ms, then 977 ms, degrading run over run as
++        the consumer falls further behind the producer. The frames are being
++        produced fine (the bridge holds 40 fps throughout); the reader is just
++        stuck waiting on a queue it can no longer keep up with.
++
++        Draining continuously in a separate thread decouples the two. The
++        processing loop takes whatever the newest frame is and never blocks, and
++        frames it cannot keep up with are dropped rather than queued -- which is
++        what you want for live video, where a stale frame has no value.
++        """
++        self._grab_frame = None
++        self._grab_running = True
++
++        def _drain() -> None:
++            while self._grab_running:
++                ok, frame = cap.read()
++                if ok:
++                    self._grab_frame = frame
++                else:
++                    time.sleep(0.005)
++
++        self._grab_thread = threading.Thread(target=_drain, daemon=True, name="camera-grabber")
++        self._grab_thread.start()
++
++        # Wait briefly for the first frame so the caller does not have to.
++        deadline = time.monotonic() + 2.0
++        while self._grab_frame is None and time.monotonic() < deadline:
++            time.sleep(0.01)
++
++    def _stop_grabber(self) -> None:
++        self._grab_running = False
++        thread = getattr(self, "_grab_thread", None)
++        if thread is not None:
++            thread.join(timeout=1.0)
++            self._grab_thread = None
++
+     def _process_frame(self, frame: np.ndarray) -> np.ndarray:
+         processed = frame
+         for effect in self._effects:
+@@ -111,8 +191,28 @@ class CameraPipeline:
+                 time.sleep(0.5)
+             return
+ 
+-        actual_width = int(self._capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+-        actual_height = int(self._capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
++        capture_width = int(self._capture.get(cv2.CAP_PROP_FRAME_WIDTH))
++        capture_height = int(self._capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
++
++        # Process at the configured size, not the camera's.
++        #
++        # A camera that only offers one large mode forces every downstream numpy
++        # step -- mask upscale, 3-channel stack, float composite -- to run over
++        # that many pixels, and those dominate the frame budget: at 1920x1088
++        # they cost several times what the NPU segmentation does and held this
++        # to 6 fps. Meeting clients re-encode to 720p anyway, so paying for 2 MP
++        # of compositing buys nothing that survives the call. cap.set() cannot
++        # help when the device exposes a single discrete size, so resize after
++        # the read instead.
++        actual_width = self.config.camera.width or capture_width
++        actual_height = self.config.camera.height or capture_height
++        self._resize_to = None
++        if (actual_width, actual_height) != (capture_width, capture_height):
++            self._resize_to = (actual_width, actual_height)
++            logger.info(
++                "Camera delivers %dx%d; processing at %dx%d",
++                capture_width, capture_height, actual_width, actual_height,
++            )
+ 
+         self._running = True
+ 
+@@ -146,32 +246,56 @@ class CameraPipeline:
+         except RuntimeError as exc:
+             logger.warning("Could not start virtual camera: %s", exc)
+ 
++        self._start_grabber(self._capture)
++
+         frame_count = 0
+         fps_timer = time.monotonic()
++        _stage_totals = [0.0, 0.0, 0.0]
+ 
+         try:
+             while self._running:
+-                ret, frame = self._capture.read()
+-                if not ret:
+-                    logger.warning("Failed to read frame from camera")
++                _t = time.monotonic()
++                frame = self._grab_frame
++                _t_read = time.monotonic() - _t
++                if frame is None:
++                    time.sleep(0.005)
+                     continue
+ 
++                if self._resize_to is not None:
++                    frame = cv2.resize(frame, self._resize_to, interpolation=cv2.INTER_AREA)
++
+                 if self.config.camera.mirror:
+                     frame = cv2.flip(frame, 1)
+ 
++                _t = time.monotonic()
+                 processed = self._process_frame(frame)
++                _t_effects = time.monotonic() - _t
++                _t_send = 0.0
+                 if virtual_cam is not None:
++                    _t = time.monotonic()
+                     virtual_cam.send(processed)
++                    _t_send = time.monotonic() - _t
+                     virtual_cam.sleep_until_next_frame()
+                 else:
+                     time.sleep(1.0 / self.config.camera.fps)
+ 
++                _stage_totals[0] += _t_read
++                _stage_totals[1] += _t_effects
++                _stage_totals[2] += _t_send
++
+                 frame_count += 1
+                 elapsed = time.monotonic() - fps_timer
+                 if elapsed >= 5.0:
+                     actual_fps = frame_count / elapsed
+-                    logger.info("Pipeline FPS: %.1f", actual_fps)
++                    logger.info(
++                        "Pipeline FPS: %.1f  (read %.0f ms, effects %.0f ms, send %.0f ms per frame)",
++                        actual_fps,
++                        _stage_totals[0] / frame_count * 1000,
++                        _stage_totals[1] / frame_count * 1000,
++                        _stage_totals[2] / frame_count * 1000,
++                    )
+                     frame_count = 0
++                    _stage_totals = [0.0, 0.0, 0.0]
+                     fps_timer = time.monotonic()
+         finally:
+             if virtual_cam is not None:
+@@ -188,6 +312,8 @@ class CameraPipeline:
+ 
+     def cleanup(self) -> None:
+         logger.info("Cleaning up pipeline...")
++        self._stop_grabber()
++
+         for effect in self._effects:
+             effect.cleanup()
+         self._model_manager.cleanup()
+-- 
+2.55.0
+

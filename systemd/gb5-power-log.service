@@ -1,0 +1,14 @@
+[Unit]
+Description=Galaxy Book5 long-run power and idle logger
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/gb5-power-log /var/log/gb5-power.csv 30
+Restart=always
+RestartSec=10
+Nice=19
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

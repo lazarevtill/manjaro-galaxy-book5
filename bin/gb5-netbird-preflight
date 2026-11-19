@@ -1,0 +1,41 @@
+#!/bin/bash
+# Refuse to start NetBird when the kernel cannot give it an nftables firewall.
+#
+# A kernel upgrade deletes /usr/lib/modules/$(uname -r) while that kernel is
+# still running. nft_ct / nft_fib_ipv4 / nft_masq then cannot load and NetBird's
+# firewall manager dies with:
+#
+#   init firewall: router init: create containers: initialize tables:
+#   conn.Receive: netlink receive: no such file or directory
+#
+# which names netlink and never mentions modules. Worse, the unit stays "active"
+# while the tunnel is dead, so systemctl reports success. This turns that into a
+# refusal with the one instruction that fixes it. Not version-specific, and no
+# NetBird flag avoids it: the firewall manager is built before flags are read.
+set -u
+
+missing=""
+for m in nft_ct nft_fib_ipv4 nft_masq; do
+    # Already loaded counts as fine even when the tree is gone -- that is exactly
+    # the state a running daemon survives in. Only "neither loaded NOR loadable"
+    # is fatal. grep -c, never grep -q in a pipeline: see AGENTS.md.
+    [ "$(lsmod | grep -c "^$m ")" -gt 0 ] && continue
+    modprobe -n "$m" >/dev/null 2>&1 && continue
+    missing="$missing $m"
+done
+[ -z "$missing" ] && exit 0
+
+newest=$(ls -1 /usr/lib/modules 2>/dev/null | grep -v '^extramodules' | sort -V | tail -1)
+echo "gb5-netbird-preflight: the kernel cannot provide:$missing" >&2
+echo "  Running kernel:  $(uname -r)" >&2
+echo "  Newest installed: $newest" >&2
+if [ "$(uname -r)" != "$newest" ]; then
+    echo "  A kernel update is pending a reboot. NetBird's nftables firewall cannot" >&2
+    echo "  initialise, so starting it would leave the unit 'active' with no tunnel." >&2
+    echo "  Fix: REBOOT. Or restore the running kernel's modules from a Timeshift" >&2
+    echo "  snapshot without rebooting -- see docs/system/docker.md." >&2
+else
+    echo "  Kernel matches, so this is not a pending reboot. Check that the nftables" >&2
+    echo "  modules are installed for this kernel." >&2
+fi
+exit 1

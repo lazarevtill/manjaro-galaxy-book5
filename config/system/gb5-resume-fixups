@@ -1,0 +1,64 @@
+#!/bin/bash
+# Repair what S4 leaves broken on this machine.
+#
+# A hibernate power-cycles the SoC, and the Samsung SCAI/EC interface does not
+# come back cleanly. Measured after a successful hibernate on 2026-08-23:
+#
+#   kbd_backlight       broken   every CSFI call answers 0xff, writes give -ENXIO
+#   power_on_lid_open   broken   reads empty, and each read costs a CSFI failure
+#   usb_charging        works
+#   platform_profile    works
+#
+# It is only PARTLY wedged, which is why it is easy to miss: the profile still
+# switches, so power management looks fine while the keyboard backlight is dead.
+# Note this is not specific to the FAILED hibernate of 2026-08-22 -- a clean one
+# does it too.
+#
+# Reloading the driver re-runs its ACPI init and clears the wedge. platform_profile
+# disappears for the moment the module is out, so the profile timer is paused
+# across the reload rather than being allowed to read a missing file.
+# Lock before suspending, not after. KDE's LockOnResume is set too, but a
+# pre-sleep lock cannot lose the race: on 2026-08-23 the machine resumed from
+# hibernate straight into an unlocked desktop (LockedHint=no), which means anyone
+# who wakes it has the session.
+case "$1/$2" in
+  pre/*)
+      for s in $(loginctl list-sessions --no-legend | awk '{print $1}'); do
+          loginctl lock-session "$s" 2>/dev/null
+      done
+      ;;
+esac
+
+case "$1/$2" in
+  post/hibernate|post/hybrid-sleep|post/suspend-then-hibernate)
+      # Never unload what cannot be loaded again. samsung_galaxybook is in-tree,
+      # so a kernel package upgrade deletes its .ko from the old modules tree. If
+      # you upgrade the kernel and then hibernate before rebooting, the unload
+      # succeeds and the reload finds nothing -- losing platform_profile,
+      # kbd_backlight, power_on_lid_open and the Fn path for the rest of the
+      # session. That is strictly worse than leaving the wedge in place.
+      if [ -z "$(modinfo -n samsung_galaxybook 2>/dev/null)" ]; then
+          logger -p user.warning -t gb5-resume-fixups \
+              "samsung_galaxybook module file is missing (kernel upgraded without reboot?) — not unloading"
+          exit 0
+      fi
+      systemctl stop gb5-power-profile.timer 2>/dev/null
+      if modprobe -r samsung_galaxybook 2>/dev/null; then
+          sleep 1
+          if modprobe samsung_galaxybook 2>/dev/null && [ -e /sys/firmware/acpi/platform_profile ]; then
+              logger -t gb5-resume-fixups "reloaded samsung_galaxybook after $2"
+          else
+              logger -p user.err -t gb5-resume-fixups \
+                  "RELOAD FAILED after $2 — platform_profile, keyboard backlight and Fn keys are gone until reboot"
+          fi
+      else
+          logger -t gb5-resume-fixups "could not unload samsung_galaxybook after $2"
+      fi
+      systemctl start gb5-power-profile.timer 2>/dev/null
+      # power-profiles-daemon picks its backend at startup, so after the module
+      # cycles it can be left driving nothing while KDE's applet still shows it.
+      systemctl try-restart power-profiles-daemon 2>/dev/null
+      /usr/local/sbin/gb5-power-tune.sh 2>/dev/null
+      ;;
+esac
+exit 0

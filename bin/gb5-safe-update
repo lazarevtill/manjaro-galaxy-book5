@@ -1,0 +1,471 @@
+#!/bin/bash
+# System update with the checks this machine actually needs.
+#
+# Not a pacman wrapper for its own sake. This box carries four things a stock
+# update can quietly break, and each has bitten already:
+#
+#   * a PATCHED libfprint that a stock package would replace, killing
+#     fingerprint auth silently (it falls through to a password prompt);
+#   * three DKMS modules -- camera, speakers, v4l2loopback -- that must rebuild
+#     or the hardware stops working;
+#   * a signed UKI under Secure Boot, where an unsigned rebuild will not boot;
+#   * a hibernation resume target, where a stale image restored over an updated
+#     filesystem is btrfs corruption.
+#
+# The rule throughout: REFUSE rather than proceed on an assumption, and VERIFY
+# afterwards rather than trust that a hook ran.
+#
+#   gb5-safe-update            # do it
+#   gb5-safe-update --check    # pre-flight only, change nothing
+#
+# Designed to be safe unattended (see gb5-safe-update.timer). That is a higher
+# bar than interactive use, because nobody is watching: every exit must be
+# distinguishable, and "refused, nothing touched" must never be reported with
+# the same words as "updated but broken".
+set -uo pipefail
+
+ESP=/boot/efi
+UKI_DIR="$ESP/EFI/Linux"
+SWAPFILE=/swap/swapfile
+STATEDIR=/var/lib/gb5
+STATUS=/run/gb5-safe-update.status
+MOTD=/etc/motd.d/gb5-update
+DKMS_MODULES=(ov02e10-26mhz max98390-hda v4l2loopback)
+# Deleting snapshots is destructive, so it is opt-in here (default 0). The user
+# opted in on 2026-11-19: gb5-safe-update.service sets GB5_PRUNE_SNAPSHOTS=1,
+# keeping the newest 3 of the snapshots THIS script made; others are untouched.
+GB5_PRUNE_SNAPSHOTS="${GB5_PRUNE_SNAPSHOTS:-0}"
+GB5_KEEP_SNAPSHOTS="${GB5_KEEP_SNAPSHOTS:-3}"
+
+CHECK_ONLY=0
+[ "${1:-}" = "--check" ] && CHECK_ONLY=1
+
+R='\033[31m'; G='\033[32m'; Y='\033[33m'; B='\033[1m'; N='\033[0m'
+ok()   { printf "  ${G}ok${N}    %s\n" "$*"; }
+warn() { printf "  ${Y}warn${N}  %s\n" "$*"; }
+bad()  { printf "  ${R}STOP${N}  %s\n" "$*"; FAILED=1; }
+hdr()  { printf "\n${B}%s${N}\n" "$*"; }
+FAILED=0
+
+# NEVER `producer | grep -q pattern` in this script. grep -q exits the instant it
+# matches, the producer gets SIGPIPE, and under `set -o pipefail` the pipeline
+# then reports failure (141) BECAUSE the match succeeded -- every such test is
+# silently inverted. It is not theoretical: the previous version's
+#     if sbctl verify | grep -q '✗'
+# reported "all EFI binaries signed" on a machine with 116 unsigned binaries, and
+# the patched-libfprint check reported the patch GONE while it was present.
+# grep -c reads its input to the end, so it cannot SIGPIPE the producer.
+matches() { local n; n=$(grep -c "$@" 2>/dev/null); [ "${n:-0}" -gt 0 ]; }
+
+# ── outcome, recorded for the notifier ────────────────────────────────────────
+# The notifier must be able to tell these apart. "Refused" means nothing was
+# touched and the advice is the opposite of the advice after a broken update.
+OUTCOME=refused            # refused | nothing-to-do | updated | update-failed | verify-failed
+DETAIL="pre-flight did not complete"
+KERNEL_UPDATE=0
+KERNEL_FROM=""; KERNEL_TO=""
+PACNEW=""
+write_status() {
+    mkdir -p "$STATEDIR" "$(dirname "$MOTD")" 2>/dev/null
+    # %q, not bare interpolation: the notifier SOURCES this file, and an
+    # unquoted `detail=pre-flight refused; nothing was changed` would run
+    # `nothing` as a command with root's privileges.
+    { printf 'outcome=%q\n'        "$OUTCOME"
+      printf 'detail=%q\n'         "$DETAIL"
+      printf 'kernel_updated=%q\n' "$KERNEL_UPDATE"
+      printf 'kernel_from=%q\n'    "$KERNEL_FROM"
+      printf 'kernel_to=%q\n'      "$KERNEL_TO"
+      printf 'pacnew=%q\n'         "$(printf '%s' "$PACNEW" | tr '\n' ' ')"
+      printf 'when=%q\n'           "$(date '+%Y-%m-%d %H:%M:%S %Z')"
+    } > "$STATUS" 2>/dev/null
+    cp -f "$STATUS" "$STATEDIR/last-update-status" 2>/dev/null
+}
+# --check must not overwrite the record of the last real run.
+[ "$CHECK_ONLY" -eq 1 ] || trap write_status EXIT
+
+[ "$(id -u)" -eq 0 ] || { echo "run as root"; exit 1; }
+
+newest_kernel() { ls -1 /usr/lib/modules 2>/dev/null | grep -v '^extramodules' | sort -V | tail -1; }
+
+# ── the update gate ───────────────────────────────────────────────────────────
+# NOT gb5-verify.sh. That suite is the right tool for "is this desktop healthy"
+# and the wrong one for "is it safe to update": it fails on a busy microphone, on
+# any unrelated failed systemd unit, on one transient journal line, and on
+# kscreen-doctor when there is no Wayland session -- which is exactly the case
+# for a boot-time catch-up run. Blocking updates on those is a false refusal, and
+# under automation a false refusal is indistinguishable from a real one.
+#
+# So the gate is this: deterministic, session-independent, and strictly about the
+# things an update can break. The full suite still runs afterwards, as
+# information rather than as a verdict.
+gate() { # gate <kernel-version> ; prints problems, returns the count
+    local k="$1" g=0
+    local m
+    for m in "${DKMS_MODULES[@]}"; do
+        # -k scopes this to the kernel we care about. Without it, a stale
+        # "installed" line for an OLD kernel satisfies the check while the build
+        # for the NEW one failed -- and the camera, speakers and loopback are
+        # dead on next boot.
+        if ! dkms status "$m" -k "$k" 2>/dev/null | matches ': installed'; then
+            echo "DKMS $m is not built for $k"; g=$((g+1))
+        fi
+    done
+    # Only our own key's failures. sbctl reports every Microsoft binary in the
+    # mirrored Windows tree as unsigned because they are signed by Microsoft, not
+    # by us: 116 of them on this machine. Grepping a bare mark makes this check
+    # fail on every run forever.
+    local uns
+    uns=$(sbctl verify 2>/dev/null | grep '✗' | grep -v '/EFI/Microsoft/')
+    if [ -n "$uns" ]; then
+        echo "sbctl reports binaries unsigned by our key:"; printf '%s\n' "$uns" | sed 's/^/    /'
+        g=$((g+1))
+    fi
+    local main
+    # sort -V, never mtime: after an LTS-only update the most recently BUILT
+    # image is the older kernel, and the gate would vouch for the wrong one.
+    main=$(ls -1 "$UKI_DIR"/manjaro-*.efi 2>/dev/null | grep -v -- '-fallback\.efi$' | sort -V | tail -1)
+    if [ -z "$main" ]; then echo "no main UKI in $UKI_DIR"; g=$((g+1))
+    elif ! sbctl verify 2>/dev/null | grep -F "$main" | matches 'is signed'; then
+        echo "the main UKI $main is NOT signed — this machine will not boot under Secure Boot"; g=$((g+1))
+    fi
+    if [ -f "$SWAPFILE" ]; then
+        local off cl
+        off=$(btrfs inspect-internal map-swapfile -r "$SWAPFILE" 2>/dev/null)
+        cl=$(grep -o 'resume_offset=[0-9]*' /etc/kernel/cmdline 2>/dev/null | cut -d= -f2)
+        if [ -n "$off" ] && [ -n "$cl" ] && [ "$off" != "$cl" ]; then
+            echo "resume offset is $off but /etc/kernel/cmdline says $cl"; g=$((g+1))
+        fi
+    fi
+    if pacman -Qq libfprint-egismoc-sdcp-git >/dev/null 2>&1; then
+        if ! strings /usr/lib/libfprint-2.so.2 2>/dev/null | matches 'Invalidated the cached SDCP session'; then
+            echo "the patched libfprint is GONE — fingerprint auth is silently degraded"; g=$((g+1))
+        fi
+        # A soname bump in the same transaction leaves the .so on disk with its
+        # strings intact while fprintd can no longer load it. Every strings-based
+        # check passes and auth still falls through to a password.
+        if ldd /usr/lib/libfprint-2.so.2 2>/dev/null | matches 'not found'; then
+            echo "libfprint has unresolved libraries (soname bump?) — rebuild the AUR package:"
+            ldd /usr/lib/libfprint-2.so.2 2>/dev/null | grep 'not found' | sed 's/^/    /'
+            g=$((g+1))
+        fi
+    fi
+    return "$g"
+}
+
+# ─────────────────────────────────────────────────────── pre-flight
+hdr "Pre-flight"
+
+RUNNING_K=$(uname -r)
+# Compare VERSIONS, not the presence of the module tree. The tree can be
+# restored from a Timeshift snapshot to make a machine usable before its reboot,
+# and a presence test would then report a pending reboot as resolved and let the
+# updater stack a second kernel on top of an unrebooted one.
+if [ "$RUNNING_K" = "$(newest_kernel)" ]; then ok "running the newest installed kernel ($RUNNING_K)"
+else bad "a kernel update is already pending a reboot (running $RUNNING_K, installed $(newest_kernel)) — REBOOT, do not update again"; fi
+
+# Gate on the NEWEST INSTALLED kernel, not the running one. When a reboot is
+# pending those differ, and the running kernel's module tree has already been
+# deleted -- gating on it would print three DKMS failures that only restate the
+# pending reboot, burying anything real underneath.
+PREFLIGHT_K=$(newest_kernel)
+[ "$PREFLIGHT_K" = "$RUNNING_K" ] || warn "gating against the installed kernel $PREFLIGHT_K, not the running $RUNNING_K"
+
+# Update a broken machine and you cannot tell what the update broke.
+if gate_out=$(gate "$PREFLIGHT_K"); then ok "update gate clean"
+else bad "the update gate is already failing — fix these first, or you will not know what the update broke"
+     printf '%s\n' "$gate_out" | sed 's/^/        /'; fi
+
+# A previous run killed mid-transaction leaves this behind. Say so plainly
+# instead of letting pacman fail cryptically every week from now on.
+if [ -e /var/lib/pacman/db.lck ]; then
+    if pgrep -x pacman >/dev/null 2>&1; then bad "another pacman is running"
+    else bad "stale /var/lib/pacman/db.lck with no pacman running — a previous transaction was killed. Inspect /var/log/pacman.log, then remove the lock"; fi
+fi
+
+ac=$(cat /sys/class/power_supply/A*/online 2>/dev/null | grep -c 1)
+cap=$(cat /sys/class/power_supply/BAT*/capacity 2>/dev/null | head -1)
+if [ "$ac" -gt 0 ]; then ok "on AC"
+elif [ "${cap:-0}" -ge 50 ]; then warn "on battery at ${cap}% — plugging in is safer"
+else bad "on battery at ${cap}% — plug in first"; fi
+
+free_root=$(df --output=avail -m / | tail -1 | tr -d ' ')
+[ "$free_root" -gt 5000 ] && ok "root has ${free_root} MiB free" || bad "root has only ${free_root} MiB free"
+
+# Room for TWO new UKIs, not one. UKIs here are named by kernel series
+# (manjaro-7.1-x86_64.efi), so a 7.1 -> 7.2 transition writes new NAMES for both
+# the main image and the fallback rather than overwriting the old ones: about
+# 84 MiB of new files, not 42. Sizing this for in-place overwrite lets pre-flight
+# pass and the copy hit ENOSPC.
+free_esp=$(df --output=avail -m "$ESP" | tail -1 | tr -d ' ')
+uki_sz=$(stat -c %s "$UKI_DIR"/manjaro-*.efi 2>/dev/null | sort -rn | head -1)
+uki_mb=$(( ${uki_sz:-0} / 1024 / 1024 ))
+need_esp=$(( uki_mb * 2 + 20 ))
+if [ "$free_esp" -gt "$need_esp" ]; then ok "ESP has ${free_esp} MiB free (needs ${need_esp} for a kernel series bump)"
+else bad "ESP has only ${free_esp} MiB free; a kernel series bump needs ${need_esp} MiB — prune old UKIs first"; fi
+
+# Use checkupdates, NOT `pacman -Sy`. -Sy refreshes the LIVE sync database, and
+# every refusal below then exits leaving that database newer than the installed
+# set -- so a later `pacman -S anything` pulls packages built against libraries
+# that are not installed yet. That is the partial upgrade Arch warns about, and
+# an earlier version of this script created it on every refusal.
+# checkupdates uses a temporary database and touches nothing.
+if ! command -v checkupdates >/dev/null 2>&1; then
+    bad "pacman-contrib is not installed; checkupdates is required to check safely without -Sy"
+    DETAIL="pacman-contrib missing"; printf "\n${R}Refusing to update.${N}\n\n"; exit 1
+fi
+PENDING=$(checkupdates 2>/dev/null); ck_rc=$?
+# rc 0 = updates, rc 2 = none, rc 1 = ERROR (no network, mirror down) with empty
+# output. Treating rc 1 as "nothing to do" is how an unattended run reports
+# cheerful weekly success while the machine silently stops being updated.
+if [ "$ck_rc" -eq 1 ]; then
+    bad "checkupdates failed (network or mirror?) — cannot tell what is pending, so not proceeding"
+fi
+n=$(printf '%s' "$PENDING" | grep -c . )
+
+if [ "$FAILED" -eq 0 ] && [ "$ck_rc" -eq 2 ]; then
+    OUTCOME=nothing-to-do; DETAIL="no packages pending"
+    ok "0 package(s) pending"
+    printf "\n${G}Nothing to do.${N}\n\n"; exit 0
+fi
+[ "$ck_rc" -eq 0 ] && ok "$n package(s) pending"
+
+# The one that would be silent: a stock libfprint replacing the patched build.
+# Read the transaction from checkupdates' OWN temporary database, so this sees
+# new installs pulled in as dependencies -- a versioned `libfprint>=X` that the
+# AUR package's Provides no longer satisfies never appears in `checkupdates`
+# output, because that lists upgrades of installed packages only.
+if pacman -Qq libfprint-egismoc-sdcp-git >/dev/null 2>&1; then
+    CKDB="${CHECKUPDATES_DB:-${TMPDIR:-/tmp}/checkup-db-$(id -u)/}"
+    targets=""
+    if [ "$ck_rc" -eq 0 ]; then
+        [ -d "$CKDB" ] && targets=$(pacman -Sup --print-format '%n' --dbpath "$CKDB" 2>/dev/null)
+        if [ -z "$targets" ]; then
+            warn "could not read the transaction target list; falling back to the pending list, which cannot see a NEW libfprint pulled in as a dependency"
+            targets="$(printf '%s\n' "$PENDING" | awk '{print $1}')"
+        fi
+    fi
+    if printf '%s\n' "$targets" | matches -x libfprint; then
+        bad "the update would install STOCK libfprint over the patched build — fingerprint auth would break silently"
+    else ok "patched libfprint not at risk"; fi
+fi
+
+# Kernel changes are decided AFTER pacman, from state (see "Post-update repair"),
+# never from a package name. This line used to read `matches -x linux71`: on
+# 2026-11-11 Manjaro replaced linux71 with linux72 in one transaction, the
+# pending list never contained "linux71", and the whole kernel branch --
+# hibernation mask, fallback UKI, DKMS check -- was skipped without a word.
+# The pre-flight hint below is advisory only; it cannot see a replacement.
+KERNEL_FROM="$RUNNING_K"
+MODS_BEFORE=$(ls -1 /usr/lib/modules 2>/dev/null | grep -v '^extramodules' | sort -V | tr '\n' ' ')
+printf '%s\n' "$PENDING" | awk '{print $1}' | matches -E '^linux[0-9]+(-rt)?$' \
+    && warn "kernel package(s) pending — DKMS rebuild, UKI re-sign and fallback regeneration will follow"
+
+if [ "$FAILED" -ne 0 ]; then
+    OUTCOME=refused; DETAIL="pre-flight refused; nothing was changed"
+    printf "\n${R}Refusing to update.${N} Nothing has been changed. Fix the items above.\n\n"; exit 1
+fi
+if [ "$CHECK_ONLY" -eq 1 ]; then printf "\n${G}Pre-flight clean.${N} Re-run without --check to proceed.\n\n"; exit 0; fi
+
+# ─────────────────────────────────────────────────────── protect
+hdr "Protecting"
+
+# A hibernation image is not cleared by a boot that does not resume it. Update
+# the filesystem underneath one and the next resume corrupts it.
+#
+# The swapfile is NOT active in this state -- swapon refuses a file whose header
+# reads S1SUSPEND, so it was skipped at boot. An earlier version chained
+# `swapoff && mkswap && swapon`, where swapoff fails with EINVAL on an inactive
+# file, short-circuits the chain so mkswap never runs, and then printed "cleared"
+# from the following line regardless. The one guard against guaranteed btrfs
+# corruption could not fire and reported success. Hence: no chaining, and a
+# failure here aborts rather than warns.
+if [ -f "$SWAPFILE" ]; then
+    if [ "$(dd if="$SWAPFILE" bs=1 skip=4086 count=10 2>/dev/null | tr -d '\0')" != "SWAPSPACE2" ]; then
+        pri=$(swapon --show=NAME,PRIO --noheadings | awk -v f="$SWAPFILE" '$1==f{print $2}')
+        swapoff "$SWAPFILE" 2>/dev/null || true
+        if mkswap "$SWAPFILE" >/dev/null 2>&1 && swapon --priority "${pri:-1}" "$SWAPFILE" 2>/dev/null; then
+            ok "cleared a stale hibernation image (it would have been restored over the updated filesystem)"
+        else
+            OUTCOME=refused
+            DETAIL="a stale hibernation image could not be cleared; nothing was changed"
+            printf "  ${R}STOP${N}  a stale hibernation image is present and could NOT be cleared.\n"
+            printf "\n${R}Refusing to touch the filesystem.${N} Updating now would leave that image to be\n"
+            printf "restored over a changed filesystem on the next boot, which is btrfs corruption.\n"
+            printf "Clear it by hand:  swapoff %s ; mkswap %s ; swapon %s\n\n" "$SWAPFILE" "$SWAPFILE" "$SWAPFILE"
+            exit 1
+        fi
+    else ok "no hibernation image to clear"; fi
+    OFFSET_BEFORE=$(btrfs inspect-internal map-swapfile -r "$SWAPFILE" 2>/dev/null)
+fi
+
+if timeshift --create --comments "gb5-safe-update: before $n packages" --tags O >/dev/null 2>&1; then
+    ok "snapshot taken"
+else warn "snapshot FAILED — continuing, but you have no rollback"; fi
+
+# ─────────────────────────────────────────────────────── update
+hdr "Updating"
+# Timestamp to compare .pacnew files against. A fixed "-1 hour" window misses
+# every pacnew from a run that took longer than an hour, and under automation
+# this is the only place they would ever be noticed.
+mkdir -p "$STATEDIR"; : > "$STATEDIR/.update-start"
+# -Syu as ONE operation. Never -Sy here and -Su later: anything between them is
+# a window where the database and the transaction disagree.
+if pacman -Syu --noconfirm > /tmp/gb5-update.log 2>&1; then ok "pacman finished (log: /tmp/gb5-update.log)"
+else
+    OUTCOME=update-failed; DETAIL="pacman failed; see /tmp/gb5-update.log"
+    bad "pacman FAILED — see /tmp/gb5-update.log"; tail -5 /tmp/gb5-update.log | sed 's/^/        /'
+    printf "\n${R}${B}The update did not complete.${N} The snapshot taken above is your rollback.\n\n"
+    exit 1
+fi
+
+# ─────────────────────────────────────────────────────── repair
+hdr "Post-update repair"
+
+TARGET_K=$(newest_kernel)
+MODS_AFTER=$(ls -1 /usr/lib/modules 2>/dev/null | grep -v '^extramodules' | sort -V | tr '\n' ' ')
+# A kernel changed if the set of module trees changed, or the running kernel's
+# tree is gone. Both are before/after comparisons of THIS transaction, so a tree
+# restored from a snapshot earlier cannot fake them. Catches a series bump, a
+# point release, and an LTS-only update alike.
+# Two different events, kept apart (Fable caught the first draft conflating them):
+#  KERNEL_UPDATE -- the RUNNING kernel was superseded or lost its tree. That is
+#    what needs a reboot and makes hibernating unsafe. Pre-flight guarantees
+#    running == newest before pacman, so this cannot be faked by a restored tree.
+#  TREES_CHANGED -- any module tree came or went (e.g. an LTS-only update). The
+#    UKIs / fallback need guarding, but nothing needs a reboot and hibernation
+#    must NOT be masked (that would also remove the critical-battery hibernate).
+KERNEL_UPDATE=0; TREES_CHANGED=0
+[ "$MODS_BEFORE" != "$MODS_AFTER" ] && TREES_CHANGED=1
+{ [ "$TARGET_K" != "$RUNNING_K" ] || [ ! -d "/usr/lib/modules/$RUNNING_K" ]; } && KERNEL_UPDATE=1
+[ "$TREES_CHANGED" -eq 1 ] && [ "$KERNEL_UPDATE" -eq 0 ] && ok "module trees changed ($MODS_AFTER) but the running kernel is current — no reboot needed"
+if [ "$KERNEL_UPDATE" -eq 1 ]; then
+    KERNEL_TO="$TARGET_K"
+    ok "kernel $KERNEL_FROM -> $KERNEL_TO (module trees now: $MODS_AFTER)"
+
+    # Nothing may hibernate between here and the reboot. A system-sleep hook
+    # CANNOT prevent it -- systemd-sleep ignores those scripts' exit status, so
+    # they have no veto; this script used to claim otherwise. Hibernating now
+    # writes an image from the running OLD kernel while the UKI carries the NEW
+    # one, so the resume is refused on version mismatch and the image is
+    # stranded: the swapfile stays dead and the filesystem carries a trap.
+    if systemctl mask --now hibernate.target hybrid-sleep.target suspend-then-hibernate.target >/dev/null 2>&1; then
+        ok "hibernation masked until the reboot (gb5-unmask-hibernate.service restores it)"
+    else warn "could not mask hibernation — do NOT hibernate before rebooting"; fi
+
+    # The fallback UKI, the removable fallback and sbctl's database are kept
+    # right by gb5-boot-guard.sh, which zzz-gb5-boot-guard.hook already ran at
+    # the end of the transaction. Run it again and treat its verdict as ours: it
+    # is idempotent, and this way a manual pacman -Syu gets the same repair.
+fi
+if [ -e /var/lib/pacman/db.lck ]; then
+    # Another transaction (pamac?) started after ours. Its own zzz hook will
+    # guard the boot chain; reporting verify-failed here would send rollback
+    # advice to a healthy machine (Fable, second review).
+    warn "another pacman transaction holds db.lck — boot guard deferred to its hook"
+elif out=$(gb5-boot-guard.sh 2>&1); then
+    [ -n "$out" ] && printf '%s\n' "$out" | sed 's/^/        /'
+    ok "boot chain guarded (removable fallback, fallback UKI, sbctl db)"
+else
+    printf '%s\n' "$out" | sed 's/^/        /'
+    bad "gb5-boot-guard reports a fault in the boot chain"
+fi
+
+# ─────────────────────────────────────────────────────── verify
+hdr "Verifying"
+
+if gate_out=$(gate "$TARGET_K"); then ok "update gate clean for $TARGET_K"
+else bad "the update gate FAILS after the update:"; printf '%s\n' "$gate_out" | sed 's/^/        /'; fi
+
+if [ -n "${OFFSET_BEFORE:-}" ]; then
+    after=$(btrfs inspect-internal map-swapfile -r "$SWAPFILE" 2>/dev/null)
+    cl=$(grep -o 'resume_offset=[0-9]*' /etc/kernel/cmdline 2>/dev/null | cut -d= -f2)
+    if [ "$after" = "$OFFSET_BEFORE" ] && [ "$after" = "$cl" ]; then ok "resume offset unchanged ($after)"
+    else bad "resume offset moved: was $OFFSET_BEFORE, now $after, cmdline says $cl — fix before hibernating"; fi
+fi
+
+# Widened from -1 hour: a large update can run longer than that, and then the
+# one place a .pacnew would ever be noticed under automation reports none.
+# -cnewer, not -newer: pacman restores the PACKAGE's mtime on every file it
+# writes, so a .pacnew carries the date it was built upstream and -newer never
+# matched one (/etc/default/grub.pacnew, mtime Oct 28, written Nov 11, missed).
+# ctime is set by the write itself and cannot be carried over.
+PACNEW=$(find /etc -name '*.pacnew' -cnewer /var/lib/gb5/.update-start 2>/dev/null)
+[ -z "$PACNEW" ] && ok "no new .pacnew files" || { warn "new .pacnew files — merge them:"; printf '%s\n' "$PACNEW" | sed 's/^/        /'; }
+
+nsnap=$(timeshift --list 2>/dev/null | grep -c 'gb5-safe-update')
+if [ "${nsnap:-0}" -gt "$GB5_KEEP_SNAPSHOTS" ]; then
+    if [ "$GB5_PRUNE_SNAPSHOTS" = "1" ]; then
+        timeshift --list 2>/dev/null | grep 'gb5-safe-update' | awk '{print $3}' \
+          | head -n -"$GB5_KEEP_SNAPSHOTS" | while read -r s; do
+              timeshift --delete --snapshot "$s" >/dev/null 2>&1 && echo "        pruned $s"
+          done
+        ok "pruned old gb5-safe-update snapshots, kept $GB5_KEEP_SNAPSHOTS"
+    else
+        warn "$nsnap gb5-safe-update snapshots are stored and nothing prunes them; delete some with 'timeshift --delete', or set GB5_PRUNE_SNAPSHOTS=1"
+    fi
+fi
+
+# Module trees no package owns, for kernels that are neither running nor the
+# newest. They are what a Timeshift restore of a module tree leaves behind
+# (7.1.8, 350 MB, sat in @ from 2026-08-23 until 2026-11-19 because the manual
+# deletion was a TASKS line nobody came back to). Owned trees are pacman's job.
+for d in /usr/lib/modules/*/; do
+    k=$(basename "$d"); [ "$k" = extramodules ] && continue
+    [ "$k" = "$RUNNING_K" ] || [ "$k" = "$TARGET_K" ] && continue
+    # Delete ONLY on pacman's explicit "No package owns" answer. Any other
+    # failure (db error, lock, I/O) must not read as permission -- Fable, 2026-11-19:
+    # `pacman -Qoq | wc -l` is 0 on every error, and the branch is rm -rf.
+    # A tree holding a vmlinuz is kept only if some UKI on the ESP still boots
+    # that kernel. A snapshot-restored tree (the 7.1.8 case this exists for)
+    # DOES contain a vmlinuz, so "has vmlinuz" alone would skip the very case.
+    in_uki=0
+    for u in "$UKI_DIR"/manjaro-*.efi; do
+        [ -e "$u" ] || continue
+        [ "$(objcopy -O binary --only-section=.uname "$u" /dev/stdout 2>/dev/null | tr -d '\0')" = "$k" ] && in_uki=1
+    done
+    qo=$(LC_ALL=C pacman -Qo "$d" 2>&1); qrc=$?
+    if [ "$qrc" -ne 0 ] && printf '%s' "$qo" | matches 'No package owns' && [ "$in_uki" -eq 0 ]; then
+        rm -rf --one-file-system "$d" && ok "removed unowned stale module tree $k"
+    elif [ "$qrc" -ne 0 ] && ! printf '%s' "$qo" | matches 'No package owns'; then
+        warn "could not tell who owns $d (pacman: $(printf '%s' "$qo" | head -1)) — left alone"
+    fi
+done
+
+# The full suite runs as INFORMATION, not as the verdict. It fails on a busy
+# microphone and on a missing Wayland session, neither of which says anything
+# about whether this update was safe. Run it once and show that same run --
+# running it twice and displaying a different execution than the one counted is
+# how two contradictory answers get printed.
+hdr "Full verification (informational — the gate above is the verdict)"
+full=$(gb5-verify.sh 2>/dev/null)
+printf '%s\n' "$full" | tail -3 | sed 's/^/  /'
+fullfail=$(printf '%s\n' "$full" | tail -3 | grep -oP 'FAIL \K[0-9]+' | head -1)
+[ "${fullfail:-0}" -gt 0 ] && warn "the full suite reports ${fullfail} failure(s); review them, but they do not by themselves mean the update broke something"
+
+# ─────────────────────────────────────────────────────── verdict
+if [ "$FAILED" -eq 0 ]; then
+    OUTCOME=updated
+    DETAIL="$n packages updated and verified"
+    printf "\n${G}${B}Update complete and verified.${N}\n"
+    if [ "$KERNEL_UPDATE" -eq 1 ]; then
+        printf "  Kernel $KERNEL_FROM -> $KERNEL_TO. ${B}Reboot.${N} Until you do, the running kernel\n"
+        printf "  is not the installed one (its modules may be gone), so new modules may not load, and hibernation is masked\n"
+        printf "  (a stale-kernel image cannot be resumed and would strand the swapfile).\n"
+    fi
+    [ -n "$PACNEW" ] && printf "  New .pacnew files need merging — see above.\n"
+    printf "\n"
+else
+    OUTCOME=verify-failed
+    DETAIL="the update ran but verification failed"
+    printf "\n${R}${B}Update completed but verification FAILED.${N}\n"
+    printf "  Do NOT reboot until you understand why. To roll back:\n"
+    printf "      ${B}1.${N} Destroy any hibernation image FIRST — a restore that leaves one\n"
+    printf "         strands it over a rolled-back filesystem, which is btrfs corruption:\n"
+    printf "             swapoff %s ; mkswap %s ; swapon %s\n" "$SWAPFILE" "$SWAPFILE" "$SWAPFILE"
+    printf "      ${B}2.${N} timeshift --list\n"
+    printf "         timeshift --restore --snapshot '<the one tagged gb5-safe-update>'\n"
+    printf "      ${B}3.${N} Before rebooting (a restore rolls back /boot but NOT the ESP):\n"
+    printf "             mkinitcpio -P ; sbctl sign-all ; gb5-boot-guard.sh ; sbctl verify\n"
+    printf "         (';' not '&&': one stale preset makes mkinitcpio -P fail and must not skip signing)\n\n"
+    exit 1
+fi

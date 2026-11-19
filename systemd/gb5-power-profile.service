@@ -1,0 +1,10 @@
+[Unit]
+Description=Pick the platform profile from power source and battery level
+# PPD writes platform_profile too, and KDE tells it to on every charger change.
+# Ordering after it means our value is the one that survives that moment; the
+# timer covers everything after.
+After=power-profiles-daemon.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/gb5-power-profile.sh

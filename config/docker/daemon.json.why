@@ -1,0 +1,73 @@
+Why /etc/docker/daemon.json looks like this.
+Docker rejects unknown keys, so the reasoning cannot live in the JSON itself.
+
+ip: 127.0.0.1
+    Default bind address for published ports. Without it, -p 8080:80 binds
+    0.0.0.0, and Docker inserts its DOCKER-FORWARD jump at the TOP of the
+    FORWARD chain while NetBird's '-i wt0 -j DROP' is the LAST rule. Every
+    published port would therefore be reachable from all of 100.76.0.0/16 and
+    from the LAN. Exposure is now opt-in per port: -p 0.0.0.0:8080:80.
+
+dns / dns-search
+    Pinned rather than inherited, with a public fallback AFTER the NetBird
+    resolver. Inheriting /etc/resolv.conf is worse in both directions: a
+    container started while the VPN is DOWN bakes in the LAN resolver for its
+    entire life, and one started while it is UP keeps querying a dead address
+    after NetBird drops (Docker copies resolv.conf at container start and only
+    refreshes on restart).
+
+    The fallback was deliberately ABSENT at first, on the argument that it leaks
+    *.in.vpn lookups. Two things changed that:
+      1. NetBird itself already forwards [.] to 1.1.1.1 -- confirmed with
+         `netbird status -d`. Public queries reach Cloudflare by design, so the
+         fallback adds no exposure while the VPN is up, when it is never even
+         consulted (the first resolver answers).
+      2. On 2026-08-23 the VPN was down for over two hours. With no fallback,
+         every container had zero DNS for that whole window: no builds, no pulls.
+    The residual leak is narrow: internal hostnames hitting NXDOMAIN at Cloudflare
+    while the VPN is down -- at which point those services are unreachable anyway.
+
+    To go back to the strict no-leak position, drop the last two entries.
+    Fragility either way: the FIRST entry is this host's own dynamic wt0 address.
+    If NetBird reassigns it, internal names silently resolve via Cloudflare
+    instead. gb5-docker-verify checks it still matches wt0 and FAILs on drift.
+
+features.containerd-snapshotter: false
+    Docker 29 makes the containerd image store the DEFAULT. This is an active
+    opt-OUT, and it is the only reason "storage-driver" above means anything.
+    Deliberate: the classic overlay2 graphdriver is the most battle-tested path,
+    and the btrfs graphdriver would create a btrfs subvolume PER LAYER.
+    Revisit trigger: the day you need
+        docker buildx build --platform linux/amd64,linux/arm64 --load
+    which fails on the graphdriver. Migrating re-pulls all images.
+    While this stays false, pigz is used for parallel layer decompression;
+    under the containerd store it would become irrelevant.
+
+builder.gc
+    reservedSpace/maxUsedSpace/minFreeSpace are the current keys. The legacy
+    defaultKeepStorage is a no-op whenever an explicit "policy" is present -- an
+    earlier version of this file set both and the 20GB silently never applied.
+    No "policy" here on purpose: BuildKit then generates its own 4-rule default,
+    which includes reclaiming source.local, exec.cachemount and git checkouts.
+    Those are what actually grow in a dev loop, and a hand-rolled 2-rule policy
+    dropped exactly that rule.
+
+userland-proxy: false
+    Removes one docker-proxy process per published port (resident memory and
+    wakeups). Caveat: IPv6 ::1 access to published ports needs the proxy. If
+    'curl 127.0.0.1:PORT' ever fails against a published port, set this true --
+    that is a correctness fix, not a security regression.
+
+live-restore: true
+    Containers survive a daemon restart, which makes 'systemctl restart docker'
+    safe after a pacman upgrade of docker/containerd/runc. Note the corollary:
+    'systemctl stop docker' leaves containers RUNNING but unmanaged.
+
+max-concurrent-uploads: 5
+    Docker's default is 5, not 3. An earlier value of 4 was an accidental
+    DECREASE.
+
+default-address-pools 172.20.0.0/14
+    172.20-172.23, 1024 networks. No collision with NetBird (100.76.0.0/16) or
+    the LAN (192.168.18.0/24). Does NOT change the default docker0 bridge at
+    172.17.0.0/16 -- that needs "bip" separately.

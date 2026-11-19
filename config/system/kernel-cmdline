@@ -1,0 +1,1 @@
+root=UUID=3e8e0bdf-0525-450d-be13-75aa2021f9a4 rw rootflags=subvol=@ quiet splash resume=UUID=3e8e0bdf-0525-450d-be13-75aa2021f9a4 resume_offset=6168051 udev.log_priority=3 reserve_mem=8M:4096:oops

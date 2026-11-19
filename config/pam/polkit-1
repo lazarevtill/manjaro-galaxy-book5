@@ -1,0 +1,7 @@
+#%PAM-1.0
+# Fingerprint first, password fallback. Overrides /usr/lib/pam.d/polkit-1.
+-auth      sufficient   pam_fprintd.so max-tries=5 timeout=45
+auth       include      system-auth
+account    include      system-auth
+password   include      system-auth
+session    include      system-auth

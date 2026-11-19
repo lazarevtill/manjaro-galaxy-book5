@@ -1,0 +1,20 @@
+[Unit]
+Description=Restore hibernation after a kernel update has been rebooted into
+Documentation=file:///home/lazarevtill/projects/gb5-enablement/docs/system/hibernation.md
+# gb5-safe-update masks hibernation after installing a kernel, because a
+# system-sleep hook cannot refuse one: systemd-sleep ignores those scripts' exit
+# status. Hibernating between the kernel install and the reboot writes an image
+# from the old kernel that the new one refuses to resume, stranding it.
+DefaultDependencies=no
+After=local-fs.target
+Before=sysinit.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Only once the running kernel actually has its module tree -- i.e. the reboot
+# that the mask was waiting for has happened.
+ExecStart=/bin/sh -c 'n=$(ls -1 /usr/lib/modules | grep -v "^extramodules" | sort -V | tail -1); test "$(uname -r)" = "$n" && exec systemctl unmask hibernate.target hybrid-sleep.target suspend-then-hibernate.target || exit 0'
+
+[Install]
+WantedBy=sysinit.target

@@ -1,0 +1,102 @@
+#!/bin/bash
+# Verify the Docker stack on this machine. Run AFTER the reboot into 7.1.9.
+#
+# Written in the same spirit as gb5-verify.sh: read state back rather than
+# trusting an exit code, and never `producer | grep -q` under pipefail (grep -q
+# exits on match, SIGPIPEs the producer, and pipefail inverts the test).
+set -uo pipefail
+
+G='\033[32m'; R='\033[31m'; Y='\033[33m'; B='\033[1m'; N='\033[0m'
+pass=0; fail=0; note=0
+ok()   { printf "  ${G}PASS${N}  %s\n" "$*"; pass=$((pass+1)); }
+no()   { printf "  ${R}FAIL${N}  %s\n" "$*"; fail=$((fail+1)); }
+nt()   { printf "  ${Y}NOTE${N}  %s\n" "$*"; note=$((note+1)); }
+hdr()  { printf "\n${B}── %s ──${N}\n" "$*"; }
+matches() { local n; n=$(grep -c "$@" 2>/dev/null); [ "${n:-0}" -gt 0 ]; }
+
+hdr "Kernel modules (all unavailable before the 7.1.9 reboot)"
+for m in overlay br_netfilter veth bridge iptable_nat nf_nat; do
+    if [ -n "$(modinfo -n "$m" 2>/dev/null)" ]; then ok "module $m available"
+    else no "module $m NOT available — is the running kernel's module tree present?"; fi
+done
+
+hdr "Storage isolation from Timeshift"
+opts=$(findmnt -no OPTIONS /var/lib/docker 2>/dev/null)
+if printf '%s' "$opts" | matches 'subvol=/@docker'; then ok "/var/lib/docker is the @docker subvolume"
+else no "/var/lib/docker is NOT on @docker — image layers would land in every snapshot (got: ${opts:-not mounted})"; fi
+if lsattr -d /var/lib/docker/volumes 2>/dev/null | matches -- '-C-'; then ok "volumes/ is nodatacow (database files will not fragment)"
+else nt "volumes/ is not nodatacow — database containers will fragment on btrfs"; fi
+# The guard must be able to FAIL, not merely to pass.
+if [ -x /usr/local/sbin/gb5-docker-preflight ]; then ok "mount guard installed"
+else no "gb5-docker-preflight missing — a failed 'nofail' mount would be silent"; fi
+
+hdr "Daemon configuration"
+if [ -r /etc/docker/daemon.json ]; then
+    if dockerd --validate --config-file /etc/docker/daemon.json >/dev/null 2>&1; then ok "daemon.json validates"
+    else no "daemon.json is INVALID — dockerd will refuse to start"; fi
+else no "/etc/docker/daemon.json missing"; fi
+
+hdr "Lifecycle (socket activation)"
+[ "$(systemctl is-enabled docker.socket 2>/dev/null)" = "enabled" ] \
+    && ok "docker.socket enabled" || no "docker.socket not enabled"
+if [ "$(systemctl is-enabled docker.service 2>/dev/null)" = "disabled" ]; then ok "docker.service disabled (starts on demand)"
+else nt "docker.service is $(systemctl is-enabled docker.service 2>/dev/null) — the daemon runs from boot, costing idle power"; fi
+
+hdr "Runtime"
+if ! docker info >/dev/null 2>&1; then
+    no "docker info failed — daemon not reachable. Try: sudo systemctl start docker"
+else
+    inf=$(docker info 2>/dev/null)
+    drv=$(printf '%s' "$inf" | sed -n 's/^ *Storage Driver: *//p')
+    [ "$drv" = "overlay2" ] && ok "storage driver overlay2" || no "storage driver is '$drv', expected overlay2"
+    cg=$(printf '%s' "$inf" | sed -n 's/^ *Cgroup Driver: *//p')
+    [ "$cg" = "systemd" ] && ok "cgroup driver systemd" || nt "cgroup driver is '$cg'"
+    cgv=$(printf '%s' "$inf" | sed -n 's/^ *Cgroup Version: *//p')
+    [ "$cgv" = "2" ] && ok "cgroup v2" || nt "cgroup version $cgv"
+    root=$(printf '%s' "$inf" | sed -n 's/^ *Docker Root Dir: *//p')
+    [ "$root" = "/var/lib/docker" ] && ok "data root $root" || no "data root is $root"
+    printf '%s' "$inf" | matches 'Live Restore Enabled: true' \
+        && ok "live-restore on (containers survive a daemon restart)" || nt "live-restore off"
+    # Warnings in docker info are the daemon telling you something is missing.
+    w=$(printf '%s' "$inf" | sed -n '/^WARNING/p')
+    [ -z "$w" ] && ok "no warnings from docker info" || { nt "docker info warnings:"; printf '%s\n' "$w" | sed 's/^/        /'; }
+fi
+
+hdr "Client plumbing"
+docker compose version >/dev/null 2>&1 && ok "docker compose (v2 plugin) works" || no "'docker compose' not available"
+docker buildx version >/dev/null 2>&1 && ok "docker buildx works" || no "'docker buildx' not available"
+if id -nG "${SUDO_USER:-$USER}" 2>/dev/null | matches -w docker; then ok "${SUDO_USER:-$USER} is in the docker group"
+else nt "${SUDO_USER:-$USER} not in the docker group in THIS shell — log out and back in"; fi
+
+hdr "Acceleration devices"
+[ -e /dev/dri/renderD128 ] && ok "iGPU render node present ($(stat -c '%U:%G %a' /dev/dri/renderD128))" || no "no /dev/dri/renderD128"
+[ -e /dev/accel/accel0 ]   && ok "NPU present ($(stat -c '%U:%G %a' /dev/accel/accel0))"   || nt "no /dev/accel/accel0"
+[ -e /dev/kvm ]            && ok "KVM present ($(stat -c '%U:%G %a' /dev/kvm))"            || nt "no /dev/kvm"
+
+hdr "Pinned DNS still valid"
+# daemon.json pins container DNS to the NetBird resolver, which is this host's
+# own wt0 address. Neither reviewer caught the fragility: if NetBird ever
+# reassigns this peer's IP, every container loses DNS with no obvious cause.
+pinned=$(python3 -c "import json;print((json.load(open('/etc/docker/daemon.json')).get('dns') or [''])[0])" 2>/dev/null)
+live=$(ip -4 -o addr show wt0 2>/dev/null | awk '{print $4}' | cut -d/ -f1)
+if [ -z "$pinned" ]; then nt "no DNS pinned in daemon.json — containers inherit /etc/resolv.conf"
+elif [ -z "$live" ]; then nt "DNS pinned to $pinned but wt0 is down — containers have NO DNS until NetBird reconnects (this is the accepted no-leak trade-off)"
+elif [ "$pinned" = "$live" ]; then ok "pinned container DNS $pinned still matches wt0"
+else no "daemon.json pins DNS to $pinned but wt0 is now $live — container DNS is BROKEN. Update daemon.json and restart docker."; fi
+
+hdr "Networking"
+fw=$(sysctl -n net.ipv4.ip_forward 2>/dev/null)
+[ "$fw" = "1" ] && ok "ip_forward on" || nt "ip_forward is $fw (Docker sets this when it starts)"
+if [ -r /etc/resolv.conf ]; then
+    ns=$(sed -n 's/^nameserver *//p' /etc/resolv.conf | head -1)
+    case "$ns" in
+      127.*) nt "resolv.conf points at a local stub ($ns) — containers cannot use it; Docker substitutes upstreams" ;;
+      100.*) nt "resolv.conf points at the NetBird resolver ($ns) — container DNS depends on the VPN being up" ;;
+      *)     ok "resolv.conf nameserver $ns" ;;
+    esac
+fi
+
+printf "\n${B}════════════════════════════════════════${N}\n"
+printf "  ${G}PASS %d${N}    ${R}FAIL %d${N}    ${Y}NOTE %d${N}\n" "$pass" "$fail" "$note"
+printf "${B}════════════════════════════════════════${N}\n\n"
+[ "$fail" -eq 0 ]

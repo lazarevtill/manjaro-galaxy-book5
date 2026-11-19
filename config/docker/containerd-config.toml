@@ -1,0 +1,14 @@
+# Keep containerd's persistent state on the @docker subvolume with Docker's.
+#
+# The default root is /var/lib/containerd, which lives inside @ and is therefore
+# captured by every Timeshift snapshot. Today that is only a few MB of task
+# metadata -- but if Docker's containerd-snapshotter is ever enabled (newer
+# releases push toward it as the default, and only the explicit "false" in
+# /etc/docker/daemon.json pins it off), the ENTIRE image content store moves
+# here. That would silently recreate the exact problem @docker exists to
+# prevent, and gb5-docker-preflight could not see it.
+#
+# 'state' stays on /run: it is tmpfs, discarded each boot, and must not persist.
+version = 4
+root = '/var/lib/docker/containerd-root'
+state = '/run/containerd'

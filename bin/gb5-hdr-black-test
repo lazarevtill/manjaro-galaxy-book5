@@ -1,0 +1,223 @@
+#!/usr/bin/env python3
+"""Does HDR lift black on this OLED? Coulomb-counted, unattended.
+
+WHY THIS IS SLOW AND CANNOT BE RUSHED
+-------------------------------------
+The effect being hunted is small and the machine is at its quietest while the
+screen is black, so signal-to-noise is at its worst. The battery gauge moves in
+49 mAh steps roughly every 445 s, and anything under ~8 steps per arm measures
+the gauge rather than the panel. At ~5 W that is about 70 minutes PER ARM.
+
+A first attempt on 2026-08-22 used 60 s arms and produced 12.45, 8.27, 4.88,
+48.80, 0.00 and 0.00 W. The charger was reconnected three arms in; even the
+battery arms disagreed by 3.4 W within one condition. All of it was discarded.
+This script exists so that cannot happen quietly again.
+
+WHAT IT REFUSES TO DO
+---------------------
+  * start on AC, or with the battery too low to finish
+  * start while the machine is busy (a build ruins it)
+  * continue if the charger is reconnected -- the run is voided, not salvaged
+  * report a difference smaller than the quantisation can support
+
+  gb5-hdr-black-test [--steps N] [--arms N] [--dry-run]
+"""
+import argparse, os, subprocess, sys, time, glob
+
+B = "/sys/class/power_supply/BAT1"
+STEP_UAH = 49000
+UID = 1000
+ENV = {**os.environ,
+       "HOME": "/home/lazarevtill",
+       "XDG_RUNTIME_DIR": f"/run/user/{UID}",
+       "DBUS_SESSION_BUS_ADDRESS": f"unix:path=/run/user/{UID}/bus",
+       "WAYLAND_DISPLAY": "wayland-0",
+       "QT_QPA_PLATFORM": "wayland"}
+
+
+def rd(p, d=0):
+    try:
+        return int(open(p).read().strip())
+    except Exception:
+        return d
+
+
+def on_ac():
+    return any(rd(p + "/online") == 1 for p in glob.glob("/sys/class/power_supply/A*"))
+
+
+def status():
+    try:
+        return open(B + "/status").read().strip()
+    except Exception:
+        return "?"
+
+
+def kscreen(*args):
+    return subprocess.run(["setpriv", "--reuid", str(UID), "--regid", str(UID),
+                           "--init-groups", "kscreen-doctor", *args],
+                          capture_output=True, text=True, timeout=30, env=ENV)
+
+
+def hdr(on):
+    kscreen(f"output.eDP-1.hdr.{'enable' if on else 'disable'}")
+
+
+def hdr_state():
+    out = kscreen("-o").stdout
+    for line in out.splitlines():
+        if "HDR:" in line:
+            return "enabled" if "enabled" in line else "disabled"
+    return "?"
+
+
+def busy_pct(sec=10):
+    def snap():
+        f = open("/proc/stat").readline().split()
+        tot = sum(int(x) for x in f[1:]); idle = int(f[4])
+        return tot, idle
+    a = snap(); time.sleep(sec); b = snap()
+    dt = b[0] - a[0]
+    return 100.0 * (dt - (b[1] - a[1])) / dt if dt else 0.0
+
+
+BLACK = r'''
+import sys
+from PyQt5.QtWidgets import QApplication, QWidget
+from PyQt5.QtGui import QColor, QPalette
+from PyQt5.QtCore import Qt
+a = QApplication(sys.argv)
+w = QWidget()
+w.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+p = QPalette(); p.setColor(QPalette.Window, QColor("#000000"))
+w.setPalette(p); w.setAutoFillBackground(True)
+w.showFullScreen()
+sys.exit(a.exec_())
+'''
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--steps", type=int, default=8,
+                    help="gauge steps required per arm (default 8, ~70 min)")
+    ap.add_argument("--arms", type=int, default=4,
+                    help="total arms, alternated (default 4 = two of each)")
+    ap.add_argument("--dry-run", action="store_true")
+    a = ap.parse_args()
+
+    if os.geteuid() != 0:
+        sys.exit("needs root (backlight, and reading the gauge)")
+
+    # ---- preconditions, checked before anything is disturbed
+    print("  preconditions:")
+    fails = []
+    if on_ac():
+        fails.append("on AC — unplug first; panel power only exists while discharging")
+    if "Discharging" not in status():
+        fails.append(f"battery status is '{status()}', need Discharging")
+    cap = rd(B + "/capacity")
+    need_mah = a.steps * a.arms * STEP_UAH / 1000
+    have_mah = rd(B + "/charge_full") / 1000 * cap / 100
+    if have_mah < need_mah * 1.4:
+        fails.append(f"battery {cap}% gives ~{have_mah:.0f} mAh; "
+                     f"this run needs ~{need_mah:.0f} mAh plus margin")
+    bp = busy_pct()
+    if bp > 4:
+        fails.append(f"CPU {bp:.1f}% busy — too noisy; a build or similar is running. "
+                     f"(A single busy core is only ~6% of 16, so this threshold is "
+                     f"deliberately low.)")
+    for f in fails:
+        print(f"    \033[31mREFUSED\033[0m {f}")
+    if fails:
+        sys.exit(1)
+    print(f"    ok — battery {cap}%, CPU {bp:.1f}% busy, "
+          f"~{need_mah:.0f} mAh needed for {a.arms} arms of {a.steps} steps")
+    est = a.steps * a.arms * 445 / 3600
+    print(f"    estimated duration ~{est:.1f} h. The screen will be black throughout.")
+    if a.dry_run:
+        print("    --dry-run, stopping here")
+        return
+
+    orig_hdr = hdr_state()
+    orig_bl = rd("/sys/class/backlight/intel_backlight/brightness")
+    black = subprocess.Popen(["setpriv", "--reuid", str(UID), "--regid", str(UID),
+                              "--init-groups", "python3", "-c", BLACK], env=ENV,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    def cleanup():
+        try:
+            black.terminate()
+        except Exception:
+            pass
+        hdr(orig_hdr == "enabled")
+        try:
+            open("/sys/class/backlight/intel_backlight/brightness", "w").write(str(orig_bl))
+        except Exception:
+            pass
+        print(f"  restored: HDR {hdr_state()}, brightness {orig_bl}")
+
+    results = []
+    try:
+        time.sleep(5)
+        for i in range(a.arms):
+            want_on = (i % 2 == 0) if (i // 2) % 2 == 0 else (i % 2 == 1)
+            label = "HDR on " if want_on else "HDR off"
+            hdr(want_on)
+            time.sleep(30)                     # settle the mode switch
+            q0, t0 = rd(B + "/charge_now"), time.time()
+            target = q0 - a.steps * STEP_UAH
+            while rd(B + "/charge_now") > target:
+                time.sleep(20)
+                if on_ac():
+                    print("\n  \033[31mVOID\033[0m charger reconnected mid-arm; "
+                          "this run cannot be salvaged and is discarded.")
+                    cleanup(); sys.exit(2)
+            q1, t1 = rd(B + "/charge_now"), time.time()
+            dt = (t1 - t0) / 3600
+            v = rd(B + "/voltage_now") / 1e6
+            amps = (q0 - q1) / 1e6 / dt
+            w = amps * v
+            # Per-arm CPU busy. A STEADY background load cancels across
+            # alternated arms; a load that starts or finishes mid-run does not,
+            # and biases whichever arm it landed in. Recording it per arm is what
+            # makes that visible instead of silently corrupting the verdict.
+            arm_busy = busy_pct(10)
+            results.append((label, w, dt, (q0 - q1) / STEP_UAH, arm_busy))
+            print(f"  arm {i+1}/{a.arms}  {label}  {w:5.2f} W   "
+                  f"{dt*60:4.0f} min   {(q0-q1)/STEP_UAH:.1f} steps   "
+                  f"cpu {arm_busy:4.1f}%", flush=True)
+    finally:
+        cleanup()
+
+    # ---- verdict, with the quantisation honoured
+    on = [r[1] for r in results if "on" in r[0]]
+    off = [r[1] for r in results if "off" in r[0]]
+    if not on or not off:
+        print("  not enough arms to compare"); return
+    mon, moff = sum(on) / len(on), sum(off) / len(off)
+    err = 100.0 / a.steps          # one step out of N, per arm
+    diff = 100.0 * (mon - moff) / moff
+
+    # If CPU load drifted between arms the comparison is confounded, whatever the
+    # power numbers say. Refuse rather than hand over a difference that might be
+    # a build finishing.
+    busies = [r[4] for r in results]
+    if max(busies) - min(busies) > 3.0:
+        print(f"\n  \033[31mCONFOUNDED\033[0m CPU busy ranged "
+              f"{min(busies):.1f}%-{max(busies):.1f}% across arms. Background load "
+              f"changed during the run, so any difference below may be that "
+              f"rather than HDR. Re-run on a genuinely idle machine.")
+        return
+    print(f"\n  HDR on  {mon:5.2f} W   (arms: {', '.join(f'{x:.2f}' for x in on)})")
+    print(f"  HDR off {moff:5.2f} W   (arms: {', '.join(f'{x:.2f}' for x in off)})")
+    print(f"  difference {diff:+.1f}%,  resolution +/-{err:.1f}% per arm")
+    if abs(diff) < err:
+        print("  \033[33mNOT MEASURABLE\033[0m — the difference is inside the "
+              "quantisation. That is not the same as 'no difference'.")
+    else:
+        print(f"  \033[32mHDR {'costs' if diff > 0 else 'saves'} "
+              f"{abs(mon-moff):.2f} W on a black screen\033[0m")
+
+
+if __name__ == "__main__":
+    main()
